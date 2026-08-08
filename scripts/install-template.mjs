@@ -28,30 +28,29 @@ async function install(options) {
   let prefix = options.prefix ? path.resolve(options.prefix) : null
   let interactive = false
   let answers
-  if (!prefix) {
-    interactive = true
-    answers = createInterface({ input: process.stdin, output: process.stdout })
-    try {
+  try {
+    if (!prefix) {
+      interactive = true
+      answers = createInterface({ input: process.stdin, output: process.stdout })
       const fallback = defaultPrefix()
       const response = await ask(answers, `Directorio de instalación [${fallback}]: `)
       prefix = path.resolve(response.trim() || fallback)
-    } finally {
-      // It stays open until the optional confirmation below.
     }
-  }
 
-  const nonEmpty = existsSync(prefix) && readdirSync(prefix).length > 0
-  if (nonEmpty && !options.force) {
-    if (!interactive) throw new Error('El directorio de instalación no está vacío. Use --force para continuar.')
-    const confirmation = await ask(answers, 'El directorio no está vacío. ¿Continuar? [y/N]: ')
-    if (!/^y(?:es)?$|^s(?:í|i)?$/i.test(confirmation.trim())) throw new Error('Instalación cancelada.')
-  }
-  answers?.close()
+    const nonEmpty = existsSync(prefix) && readdirSync(prefix).length > 0
+    if (nonEmpty && !options.force) {
+      if (!interactive) throw new Error('El directorio de instalación no está vacío. Use --force para continuar.')
+      const confirmation = await ask(answers, 'El directorio no está vacío. ¿Continuar? [y/N]: ')
+      if (!/^y(?:es)?$|^s(?:í|i)?$/i.test(confirmation.trim())) throw new Error('Instalación cancelada.')
+    }
 
-  const archive = path.join(packageDirectory, archives[0])
-  await runNpm(['install', '--prefix', prefix, '--ignore-scripts', '--no-audit', '--no-fund', archive])
-  process.stdout.write(`Octave Notebook instalado en ${prefix}\n`)
-  process.stdout.write(`Ejecute: npx --prefix "${prefix}" octave-notebook setup\n`)
+    const archive = path.join(packageDirectory, archives[0])
+    await runNpm(['install', '--prefix', prefix, '--ignore-scripts', '--no-audit', '--no-fund', archive])
+    process.stdout.write(`Octave Notebook instalado en ${prefix}\n`)
+    process.stdout.write(`Ejecute: npx --prefix "${prefix}" octave-notebook setup\n`)
+  } finally {
+    answers?.close()
+  }
 }
 
 function defaultPrefix() {

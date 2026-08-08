@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
+import { renderNotebookPdf } from './notebookPdf.ts'
 import { createRuntimeManager } from './runtime/index.ts'
 
 const rootDir = path.resolve(process.env.OCTAVE_NOTEBOOK_ROOT || process.cwd())
@@ -79,6 +80,10 @@ function inlineDisposition(filename: string) {
   return `inline; filename="${fallback}"; filename*=UTF-8''${encoded}`
 }
 
+function attachmentDisposition(filename: string) {
+  return inlineDisposition(filename).replace(/^inline;/, 'attachment;')
+}
+
 function notebook(pathname: string) {
   return {
     version: 1 as const,
@@ -147,9 +152,27 @@ app.get('/api/assets', async (req, res, next) => {
 app.get('/api/files', async (req, res, next) => {
   try {
     const target = projectPath(req.query.path)
-    const document = JSON.parse(await readUtf8(await resolveExistingFile(target)))
+    const absolutePath = await resolveExistingFile(target)
+    const document = JSON.parse(await readUtf8(absolutePath))
     assertDocument(document)
-    res.json({ document })
+    res.json({ document, absolutePath })
+  } catch (error) { next(error) }
+})
+
+app.get('/api/notebooks/pdf', async (req, res, next) => {
+  try {
+    const target = projectPath(req.query.path)
+    if (path.extname(target.absolute).toLowerCase() !== '.octnb') throw new Error('El recurso no es un cuaderno')
+    const absolutePath = await resolveExistingFile(target)
+    const document = JSON.parse(await readUtf8(absolutePath))
+    assertDocument(document)
+    const pdf = await renderNotebookPdf(document)
+    const filename = `${path.basename(target.relative, '.octnb')}.pdf`
+    res.type('application/pdf')
+    res.setHeader('Content-Disposition', attachmentDisposition(filename))
+    res.setHeader('Content-Length', String(pdf.length))
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.send(pdf)
   } catch (error) { next(error) }
 })
 

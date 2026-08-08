@@ -1,4 +1,9 @@
-import type { editor, MarkerSeverity } from 'monaco-editor';
+import type {
+  editor,
+  IRange,
+  languages,
+  MarkerSeverity,
+} from 'monaco-editor';
 
 type Monaco = typeof import('monaco-editor');
 
@@ -7,7 +12,21 @@ export type OctaveDiagnostic = {
   column?: number;
   severity: 'error' | 'warning' | 'info';
   message: string;
+  /** Stable identifier used to offer a matching Monaco quick fix. */
+  code?: string;
 };
+
+const diagnosticCodes = {
+  consecutiveSeparators: 'octave.consecutiveSeparators',
+  orphanBlockCloser: 'octave.orphanBlockCloser',
+  mismatchedBlockCloser: 'octave.mismatchedBlockCloser',
+  unclosedBlock: 'octave.unclosedBlock',
+  unmatchedDelimiter: 'octave.unmatchedDelimiter',
+  unclosedDelimiter: 'octave.unclosedDelimiter',
+  unclosedBlockComment: 'octave.unclosedBlockComment',
+} as const;
+
+const QUICK_FIX_KIND = 'quickfix.octave';
 
 type Delimiter = { char: '(' | '[' | '{'; line: number; column: number };
 type Block = { kind: string; line: number; column: number };
@@ -117,18 +136,21 @@ export function lintOctave(source: string): OctaveDiagnostic[] {
       blockCommentStart = undefined;
     }
 
-    const doubleSeparator = line.match(/[,;]\s*[,;]/);
-    if (doubleSeparator) {
-      diagnostics.push({
-        line: lineNumber,
-        column: doubleSeparator.index! + 1,
-        severity: 'warning',
-        message: 'Separadores consecutivos; puede faltar una expresión.',
-      });
-    }
-
     for (let columnIndex = 0; columnIndex < line.length; columnIndex += 1) {
       const char = line[columnIndex];
+      const doubleSeparator = (char === ',' || char === ';')
+        && delimiters.some((delimiter) => delimiter.char === '[')
+        ? line.slice(columnIndex).match(/^[,;]\s*[,;]/)
+        : undefined;
+      if (doubleSeparator) {
+        diagnostics.push({
+          line: lineNumber,
+          column: columnIndex + 1,
+          severity: 'warning',
+          message: 'Separadores consecutivos; puede faltar una expresión.',
+          code: diagnosticCodes.consecutiveSeparators,
+        });
+      }
       if (char === '(' || char === '[' || char === '{') {
         delimiters.push({ char, line: lineNumber, column: columnIndex + 1 });
       } else if (char === ')' || char === ']' || char === '}') {
@@ -140,6 +162,7 @@ export function lintOctave(source: string): OctaveDiagnostic[] {
             column: columnIndex + 1,
             severity: 'error',
             message: `Delimitador «${char}» sin apertura compatible.`,
+            code: `${diagnosticCodes.unmatchedDelimiter}:${char}`,
           });
         } else {
           delimiters.pop();
@@ -163,6 +186,7 @@ export function lintOctave(source: string): OctaveDiagnostic[] {
         column: columnForLine(line),
         severity: 'error',
         message: '«end» no tiene un bloque de apertura.',
+        code: `${diagnosticCodes.orphanBlockCloser}:end`,
       });
       return;
     }
@@ -176,6 +200,7 @@ export function lintOctave(source: string): OctaveDiagnostic[] {
           column: columnForLine(line),
           severity: 'error',
           message: `«${firstWord}» no tiene un bloque de apertura.`,
+          code: `${diagnosticCodes.orphanBlockCloser}:${firstWord}`,
         });
       } else if (open.kind !== expectedOpener) {
         diagnostics.push({
@@ -183,6 +208,7 @@ export function lintOctave(source: string): OctaveDiagnostic[] {
           column: columnForLine(line),
           severity: 'error',
           message: `«${firstWord}» cierra «${expectedOpener}», pero el bloque abierto es «${open.kind}».`,
+          code: `${diagnosticCodes.mismatchedBlockCloser}:${openerToCloser[open.kind]}`,
         });
       } else {
         blocks.pop();
@@ -190,18 +216,26 @@ export function lintOctave(source: string): OctaveDiagnostic[] {
     }
   });
 
-  delimiters.forEach((open) => diagnostics.push({
+  delimiters.forEach((open, index) => diagnostics.push({
     line: open.line,
     column: open.column,
     severity: 'error',
     message: `Delimitador «${open.char}» sin cerrar.`,
+    // Close nested delimiters from the inside out. Offering a fix for an
+    // outer delimiter first can create a new mismatch.
+    code: index === delimiters.length - 1
+      ? `${diagnosticCodes.unclosedDelimiter}:${open.char}`
+      : undefined,
   }));
 
-  blocks.forEach((open) => diagnostics.push({
+  blocks.forEach((open, index) => diagnostics.push({
     line: open.line,
     column: open.column,
     severity: 'error',
     message: `Bloque «${open.kind}» sin cerrar. Falta «${openerToCloser[open.kind]}» o «end».`,
+    code: index === blocks.length - 1
+      ? `${diagnosticCodes.unclosedBlock}:${openerToCloser[open.kind]}`
+      : undefined,
   }));
 
   if (inBlockComment && blockCommentStart) diagnostics.push({
@@ -209,6 +243,7 @@ export function lintOctave(source: string): OctaveDiagnostic[] {
     column: blockCommentStart.column,
     severity: 'error',
     message: 'Comentario de bloque sin cerrar.',
+    code: `${diagnosticCodes.unclosedBlockComment}:${lines[blockCommentStart.line - 1]?.[blockCommentStart.column - 1] ?? '%'}`,
   });
 
   return diagnostics;
@@ -247,6 +282,175 @@ export function toMonacoMarkers(
       severity: severityValue(monaco, diagnostic.severity),
       message: diagnostic.message,
       source: 'Octave',
+      code: diagnostic.code,
     };
   });
+}
+
+function markerCode(marker: editor.IMarkerData): string | undefined {
+  return typeof marker.code === 'string' ? marker.code : marker.code?.value;
+}
+
+function textEdit(
+  model: editor.ITextModel,
+  range: IRange,
+  text: string,
+) {
+  return {
+    resource: model.uri,
+    versionId: model.getVersionId(),
+    textEdit: { range, text },
+  };
+}
+
+function lineCommentColumn(line: string): number | undefined {
+  let quote: "'" | '"' | undefined;
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (quote) {
+      if (char !== quote) continue;
+      if (line[index + 1] === quote) index += 1;
+      else if (quote !== '"' || line[index - 1] !== '\\') quote = undefined;
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      // Like the linter, treat an apostrophe after an identifier or closing
+      // delimiter as transpose instead of the start of a string.
+      if (char === "'" && /[\w)\]}]/.test(line[index - 1] ?? '')) continue;
+      quote = char;
+    }
+    else if (char === '%' || char === '#') return index + 1;
+  }
+  return undefined;
+}
+
+/** Convert local lint markers into conservative, syntax-only Monaco quick fixes. */
+export function provideOctaveCodeActions(
+  monaco: Monaco,
+  model: editor.ITextModel,
+  markers: editor.IMarkerData[],
+): languages.CodeAction[] {
+  const actions: languages.CodeAction[] = [];
+
+  markers.forEach((marker) => {
+    if (marker.source !== 'Octave') return;
+    const code = markerCode(marker);
+    if (!code) return;
+
+    const action = (
+      title: string,
+      range: IRange,
+      text: string,
+      preferred = true,
+    ) => actions.push({
+      title,
+      kind: QUICK_FIX_KIND,
+      isPreferred: preferred,
+      diagnostics: [marker],
+      edit: { edits: [textEdit(model, range, text)] },
+    });
+
+    if (code === diagnosticCodes.consecutiveSeparators) {
+      const line = model.getLineContent(marker.startLineNumber);
+      const rest = line.slice(marker.startColumn - 1);
+      const duplicate = /[,;]\s*([,;])/.exec(rest);
+      if (!duplicate) return;
+      if (duplicate[0][0] !== duplicate[1]) return;
+      const duplicateColumn = marker.startColumn
+        + duplicate.index
+        + duplicate[0].lastIndexOf(duplicate[1]);
+      action(
+        'Quitar el separador duplicado',
+        new monaco.Range(marker.startLineNumber, duplicateColumn, marker.startLineNumber, duplicateColumn + 1),
+        '',
+      );
+      return;
+    }
+
+    if (code.startsWith(`${diagnosticCodes.unclosedDelimiter}:`)) {
+      const opener = code.slice(-1);
+      const closer = opener === '(' ? ')' : opener === '[' ? ']' : opener === '{' ? '}' : undefined;
+      if (!closer) return;
+      const line = model.getLineContent(marker.startLineNumber);
+      const commentColumn = lineCommentColumn(line);
+      const column = commentColumn ?? model.getLineMaxColumn(marker.startLineNumber);
+      action(
+        `Insertar «${closer}»`,
+        new monaco.Range(marker.startLineNumber, column, marker.startLineNumber, column),
+        closer,
+      );
+      return;
+    }
+
+    if (code.startsWith(`${diagnosticCodes.unmatchedDelimiter}:`)
+      || code.startsWith(`${diagnosticCodes.orphanBlockCloser}:`)) {
+      action(
+        'Quitar el cierre sin apertura',
+        new monaco.Range(
+          marker.startLineNumber,
+          marker.startColumn,
+          marker.endLineNumber,
+          marker.endColumn,
+        ),
+        '',
+      );
+      return;
+    }
+
+    if (code.startsWith(`${diagnosticCodes.mismatchedBlockCloser}:`)) {
+      const closer = code.slice(code.lastIndexOf(':') + 1);
+      if (!closer) return;
+      action(
+        `Cambiar por «${closer}»`,
+        new monaco.Range(
+          marker.startLineNumber,
+          marker.startColumn,
+          marker.endLineNumber,
+          marker.endColumn,
+        ),
+        closer,
+      );
+      return;
+    }
+
+    if (code.startsWith(`${diagnosticCodes.unclosedBlock}:`)
+      || code.startsWith(`${diagnosticCodes.unclosedBlockComment}:`)) {
+      const suffix = code.slice(code.lastIndexOf(':') + 1);
+      const closer = code.startsWith(`${diagnosticCodes.unclosedBlockComment}:`)
+        ? `${suffix === '#' ? '#' : '%'}}`
+        : suffix;
+      if (!closer) return;
+      const openingLine = model.getLineContent(marker.startLineNumber);
+      const indent = openingLine.match(/^\s*/)?.[0] ?? '';
+      const lastLine = model.getLineCount();
+      const lastColumn = model.getLineMaxColumn(lastLine);
+      const needsEol = model.getLineContent(lastLine).length > 0;
+      action(
+        `Insertar «${closer}»`,
+        new monaco.Range(lastLine, lastColumn, lastLine, lastColumn),
+        `${needsEol ? model.getEOL() : ''}${indent}${closer}`,
+      );
+    }
+  });
+
+  return actions;
+}
+
+const registeredMonacoInstances = new WeakSet<object>();
+
+/** Register once per Monaco runtime so every Octave model exposes VS Code-style fixes. */
+export function registerOctaveLintCodeActions(monaco: Monaco): void {
+  if (registeredMonacoInstances.has(monaco)) return;
+  registeredMonacoInstances.add(monaco);
+  monaco.languages.registerCodeActionProvider('octave', {
+    provideCodeActions(model, _range, context) {
+      if (context.only && !QUICK_FIX_KIND.startsWith(context.only)) {
+        return { actions: [], dispose: () => undefined };
+      }
+      return {
+        actions: provideOctaveCodeActions(monaco, model, context.markers),
+        dispose: () => undefined,
+      };
+    },
+  }, { providedCodeActionKinds: [QUICK_FIX_KIND] });
 }

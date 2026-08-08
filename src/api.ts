@@ -12,11 +12,21 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>
 }
 
+async function requestBlob(url: string): Promise<Blob> {
+  const response = await fetch(url, { headers: { Accept: 'application/pdf' } })
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({ error: response.statusText }))
+    throw new Error(body.error || response.statusText)
+  }
+  return response.blob()
+}
+
 export const api = {
   tree: () => request<{ nodes: TreeNode[] }>('/api/tree'),
-  read: (path: string) => request<{ document: NotebookDocument }>(`/api/files?path=${encodeURIComponent(path)}`),
+  read: (path: string) => request<{ document: NotebookDocument; absolutePath: string }>(`/api/files?path=${encodeURIComponent(path)}`),
   create: (path: string, type: 'file' | 'directory') => request<{ path: string }>('/api/files', { method: 'POST', body: JSON.stringify({ path, type }) }),
   save: (path: string, document: NotebookDocument) => request<{ savedAt: string }>('/api/files', { method: 'PUT', body: JSON.stringify({ path, document }) }),
+  pdf: (path: string) => requestBlob(`/api/notebooks/pdf?path=${encodeURIComponent(path)}`),
   remove: (path: string) => request<{ ok: true }>(`/api/files?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
   rename: (path: string, nextPath: string) => request<{ path: string }>('/api/files/rename', { method: 'POST', body: JSON.stringify({ path, nextPath }) }),
   runtime: {

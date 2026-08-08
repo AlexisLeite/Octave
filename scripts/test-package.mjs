@@ -38,7 +38,7 @@ try {
 
   await mkdir(interactivePrefix, { recursive: true })
   await writeFile(path.join(interactivePrefix, 'existing.txt'), 'confirmación requerida\n', 'utf8')
-  await runInteractiveInstaller(installer, `${interactivePrefix}\ny\n`, isolatedEnvironment)
+  await runInteractiveInstaller(installer, interactivePrefix, isolatedEnvironment)
   await stat(path.join(interactivePrefix, 'node_modules', packageJson.name, 'bin', 'octave-notebook.cjs'))
 
   const cli = path.join(prefix, 'node_modules', packageJson.name, 'bin', 'octave-notebook.cjs')
@@ -52,6 +52,11 @@ try {
   await run(process.execPath, [cli, 'setup', '--config', configFile], temporaryRoot, 'setup de Octave', false, isolatedEnvironment)
   await stat(configFile)
   await run(process.execPath, [cli, 'doctor', '--config', configFile], temporaryRoot, 'doctor de Octave', false, isolatedEnvironment)
+  const configuredOctave = JSON.parse(await readFile(configFile, 'utf8')).octavePath
+  const overrideConfig = path.join(configHome, 'octave-override.json')
+  await run(process.execPath, [cli, 'doctor', '--config', overrideConfig, '--octave-path', configuredOctave], temporaryRoot, 'override explícito de Octave', false, isolatedEnvironment)
+  if (!JSON.parse(await readFile(overrideConfig, 'utf8')).octavePath) throw new Error('doctor no registró --octave-path en la configuración aislada.')
+  await run(process.execPath, [cli, 'doctor', '--config', overrideConfig], temporaryRoot, 'reuso del override de Octave', false, isolatedEnvironment)
   const port = await reserveFreePort()
   application = spawn(process.execPath, [cli, 'start', '--host', '127.0.0.1', '--port', String(port), '--projects', projects, '--config', configFile], {
     cwd: temporaryRoot,
@@ -156,7 +161,7 @@ function run(command, args, cwd, label, inherit = false, env = process.env) {
   })
 }
 
-function runInteractiveInstaller(installer, input, env) {
+function runInteractiveInstaller(installer, selectedPrefix, env) {
   return new Promise((resolveRun, rejectRun) => {
     let output = ''
     const child = spawn(process.execPath, [installer], { cwd: temporaryRoot, windowsHide: true, env, stdio: ['pipe', 'pipe', 'pipe'] })
@@ -164,7 +169,19 @@ function runInteractiveInstaller(installer, input, env) {
       child.kill('SIGKILL')
       rejectRun(new Error(`La instalación interactiva excedió 45 segundos: ${output}`))
     }, 45_000)
-    child.stdout.on('data', (chunk) => { output += chunk.toString() })
+    let sentPrefix = false
+    let sentConfirmation = false
+    child.stdout.on('data', (chunk) => {
+      output += chunk.toString()
+      if (!sentPrefix && output.includes('Directorio de instalaci')) {
+        sentPrefix = true
+        child.stdin.write(`${selectedPrefix}\n`)
+      }
+      if (!sentConfirmation && output.includes('Continuar?')) {
+        sentConfirmation = true
+        child.stdin.end('y\n')
+      }
+    })
     child.stderr.on('data', (chunk) => { output += chunk.toString() })
     child.once('error', (error) => { clearTimeout(timer); rejectRun(error) })
     child.once('exit', (code) => {
@@ -172,7 +189,6 @@ function runInteractiveInstaller(installer, input, env) {
       if (code === 0) resolveRun()
       else rejectRun(new Error(`Instalación interactiva falló con código ${code}: ${output.trim()}`))
     })
-    child.stdin.end(input)
   })
 }
 

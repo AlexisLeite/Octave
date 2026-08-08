@@ -93,6 +93,20 @@ class RuntimeTimeoutError extends RuntimeOperationalError {}
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_OUTPUT_BYTES = 10 * 1024 * 1024;
+const IMPLICIT_NOTEBOOK_SOURCE = [
+  "function heading = heading(txt, txt2)",
+  '  disp("")',
+  "  disp(txt)",
+  "  if nargin >= 2",
+  '    rendered = evalc("disp(txt2)");',
+  '    rendered = regexprep(rendered, "\\r?\\n$", "");',
+  '    lines = strsplit(rendered, "\\n", "collapsedelimiters", false);',
+  "    for line_index = 1:numel(lines)",
+  '      fprintf("  %s\\n", lines{line_index});',
+  "    endfor",
+  "  endif",
+  "end",
+].join("\n");
 
 class OctaveRuntime {
   readonly runtimeId = randomUUID();
@@ -180,8 +194,9 @@ class OctaveRuntime {
     );
 
     try {
-      // A protocol round-trip both detects spawn failures and consumes any startup output.
-      await runtime.enqueue(() => runtime.runSource("1;\n", "startup"));
+      // Detect spawn failures and install notebook helpers without exposing a
+      // synthetic cell or bootstrap output to the document.
+      await runtime.enqueue(() => runtime.runSource(IMPLICIT_NOTEBOOK_SOURCE, "startup"));
       return runtime;
     } catch (error) {
       await runtime.forceClose();
@@ -202,8 +217,8 @@ class OctaveRuntime {
         const protocol = await this.runSource(input.code, sourcePath);
         return {
           cellId: input.cellId,
-          stdout: protocol.stdout,
-          stderr: protocol.stderr,
+          stdout: trimOuterBlankLines(protocol.stdout),
+          stderr: trimOuterBlankLines(protocol.stderr),
           durationMs: Math.max(0, performance.now() - startedAt),
           error: protocol.error ? normalizeOctaveError(protocol.error, sourcePath) : null,
         };
@@ -665,6 +680,12 @@ function safeFilePart(value: string): string {
 
 function ensureTrailingNewline(value: string): string {
   return value.endsWith("\n") ? value : `${value}\n`;
+}
+
+function trimOuterBlankLines(value: string): string {
+  return value
+    .replace(/^(?:[\t ]*\r?\n)+/, "")
+    .replace(/(?:\r?\n[\t ]*)+$/, "");
 }
 
 function positiveInteger(value: number | undefined, fallback: number, name: string): number {

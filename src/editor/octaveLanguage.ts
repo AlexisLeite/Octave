@@ -18,6 +18,10 @@ type InspectionBinding = {
 type Registry = {
   instances: WeakSet<object>;
   inspectors: WeakMap<editor.ITextModel, InspectionBinding>;
+  completionSources: WeakMap<editor.ITextModel, string[]>;
+  providerRevision?: object;
+  completionProvider?: IDisposable;
+  inspectionProvider?: IDisposable;
 };
 
 const globalRegistry = globalThis as typeof globalThis & {
@@ -29,7 +33,17 @@ const registry: Registry =
   (globalRegistry.__octaveMonacoRegistry = {
     instances: new WeakSet<object>(),
     inspectors: new WeakMap<editor.ITextModel, InspectionBinding>(),
+    completionSources: new WeakMap<editor.ITextModel, string[]>(),
   });
+
+registry.completionSources ??= new WeakMap<editor.ITextModel, string[]>();
+const providerRevision = {};
+
+export interface OctaveCompletionSymbol {
+  name: string;
+  kind: 'variable' | 'parameter' | 'function' | 'field';
+  owner?: string;
+}
 
 const keywords = [
   'break',
@@ -101,6 +115,16 @@ const blockOpenPattern =
   /^(?:\s*)(?:if|for|parfor|while|switch|try|unwind_protect|function|classdef|properties|methods|events|enumeration)\b/i;
 const blockClosePattern =
   /^(?:\s*)(?:end|endif|endfor|endparfor|endwhile|endswitch|end_try_catch|end_unwind_protect|endfunction|endclassdef|endproperties|endmethods|endevents|endenumeration|until)\b/i;
+
+/** Return the line-comment marker to insert after Enter at a model column. */
+export function octaveCommentPrefixAt(line: string, column: number): string | undefined {
+  if (/^\s*(?:%+|#+)[{}]/.test(line)) return undefined;
+
+  const beforeCursor = line.slice(0, Math.max(0, column - 1));
+  const comment = /^(\s*)((?:%+|#+))(?:[ \t]?)/.exec(beforeCursor);
+  if (!comment || column - 1 < comment[1].length + comment[2].length) return undefined;
+  return `${comment[2]} `;
+}
 
 const languageConfiguration: languages.LanguageConfiguration = {
   comments: {
@@ -242,6 +266,87 @@ function markdownCode(value: string): string {
   return `\`\`\`text\n${value.replace(/```/g, '\\`\\`\\`')}\n\`\`\``;
 }
 
+function executableOctaveLines(source: string): string[] {
+  let blockComment = false;
+  return source.split(/\r?\n/).map((line) => {
+    const trimmed = line.trim();
+    if (blockComment) {
+      if (trimmed === '%}' || trimmed === '#}') blockComment = false;
+      return '';
+    }
+    if (trimmed === '%{' || trimmed === '#{') {
+      blockComment = true;
+      return '';
+    }
+
+    let result = '';
+    let quote: "'" | '"' | null = null;
+    for (let index = 0; index < line.length; index += 1) {
+      const character = line[index];
+      if (quote) {
+        result += ' ';
+        if (quote === "'" && character === "'" && line[index + 1] === "'") {
+          result += ' ';
+          index += 1;
+        } else if (quote === '"' && character === '\\') {
+          result += ' ';
+          index += 1;
+        } else if (character === quote) {
+          quote = null;
+        }
+        continue;
+      }
+      if (character === '%' || character === '#') break;
+      if (character === "'" || character === '"') {
+        quote = character;
+        result += ' ';
+        continue;
+      }
+      result += character;
+    }
+    return result;
+  });
+}
+
+/** Extracts user-defined names without treating strings or comments as code. */
+export function collectOctaveSymbols(source: string): OctaveCompletionSymbol[] {
+  const symbols = new Map<string, OctaveCompletionSymbol>();
+  const add = (symbol: OctaveCompletionSymbol) => {
+    const key = `${symbol.kind}:${symbol.owner ?? ''}:${symbol.name}`;
+    if (!symbols.has(key)) symbols.set(key, symbol);
+  };
+  const addNames = (value: string | undefined, kind: 'variable' | 'parameter') => {
+    for (const name of value?.match(/[A-Za-z_]\w*/g) ?? []) add({ name, kind });
+  };
+
+  for (const line of executableOctaveLines(source)) {
+    const declaration = /^\s*function\s+(?:(?:\[([^\]]*)\]|([A-Za-z_]\w*))\s*=\s*)?([A-Za-z_]\w*)\s*(?:\(([^)]*)\))?/.exec(line);
+    if (declaration) {
+      add({ name: declaration[3], kind: 'function' });
+      addNames(declaration[1] ?? declaration[2], 'variable');
+      addNames(declaration[4], 'parameter');
+    }
+
+    const bracketAssignments = line.matchAll(/\[([^\]]+)\]\s*=(?!=)/g);
+    for (const match of bracketAssignments) addNames(match[1], 'variable');
+
+    const assignments = line.matchAll(/\b([A-Za-z_]\w*)\s*(?:\.[A-Za-z_]\w*\s*)*(?:\+=|-=|\*=|\/=|\\=|=(?!=))/g);
+    for (const match of assignments) add({ name: match[1], kind: 'variable' });
+
+    const loop = /^\s*(?:for|parfor)\s+([A-Za-z_]\w*)\s*=/.exec(line);
+    if (loop) add({ name: loop[1], kind: 'variable' });
+    const caught = /^\s*catch\s+([A-Za-z_]\w*)/.exec(line);
+    if (caught) add({ name: caught[1], kind: 'variable' });
+    const declared = /^\s*(?:global|persistent)\s+(.+)$/.exec(line);
+    if (declared) addNames(declared[1], 'variable');
+
+    for (const field of line.matchAll(/\b([A-Za-z_]\w*)\.([A-Za-z_]\w*)/g)) {
+      add({ name: field[2], kind: 'field', owner: field[1] });
+    }
+  }
+  return [...symbols.values()];
+}
+
 function registerCompletionProvider(monaco: Monaco): IDisposable {
   return monaco.languages.registerCompletionItemProvider('octave', {
     triggerCharacters: ['.'],
@@ -254,6 +359,58 @@ function registerCompletionProvider(monaco: Monaco): IDisposable {
         endColumn: word.endColumn,
       };
 
+      const beforeCursor = model.getValueInRange({
+        startLineNumber: 1,
+        startColumn: 1,
+        endLineNumber: position.lineNumber,
+        endColumn: position.column,
+      });
+      const linePrefix = model.getLineContent(position.lineNumber).slice(0, position.column - 1);
+      const fieldOwner = /\b([A-Za-z_]\w*)\.[A-Za-z_]*$/.exec(linePrefix)?.[1];
+      const currentSymbols = collectOctaveSymbols(beforeCursor);
+      const currentFunctions = collectOctaveSymbols(model.getValue()).filter((symbol) => symbol.kind === 'function');
+      const notebookSymbols = (registry.completionSources.get(model) ?? []).flatMap(collectOctaveSymbols);
+      const seen = new Set<string>();
+      const localItems: languages.CompletionItem[] = [];
+      const appendSymbols = (symbols: OctaveCompletionSymbol[], rank: string, detail: string) => {
+        for (const symbol of symbols) {
+          if (fieldOwner ? symbol.kind !== 'field' || symbol.owner !== fieldOwner : symbol.kind === 'field') continue;
+          if (seen.has(symbol.name)) continue;
+          seen.add(symbol.name);
+          const isFunction = symbol.kind === 'function';
+          localItems.push({
+            label: symbol.name,
+            kind: isFunction
+              ? monaco.languages.CompletionItemKind.Function
+              : symbol.kind === 'field'
+                ? monaco.languages.CompletionItemKind.Field
+                : monaco.languages.CompletionItemKind.Variable,
+            detail: `${detail} · ${symbol.kind === 'parameter' ? 'parámetro' : symbol.kind}`,
+            insertText: isFunction ? `${symbol.name}($0)` : symbol.name,
+            ...(isFunction ? { insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet } : {}),
+            range,
+            sortText: `${rank}-${symbol.name}`,
+          });
+        }
+      };
+      appendSymbols(currentSymbols, '00', 'Celda actual');
+      appendSymbols(currentFunctions, '01', 'Celda actual');
+      appendSymbols(notebookSymbols, '02', 'Cuaderno');
+      if (!fieldOwner && !seen.has('heading')) {
+        seen.add('heading');
+        localItems.push({
+          label: 'heading',
+          filterText: 'heading',
+          kind: monaco.languages.CompletionItemKind.Function,
+          detail: 'Cuaderno · función implícita · heading(txt, txt2?)',
+          documentation: 'Muestra un encabezado y, opcionalmente, un segundo valor.',
+          insertText: 'heading(${1:txt})',
+          insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+          range,
+          sortText: '03-heading',
+        });
+      }
+
       const snippetItems: languages.CompletionItem[] = snippets.map(([label, insertText, detail]) => ({
         label,
         kind: monaco.languages.CompletionItemKind.Snippet,
@@ -262,7 +419,7 @@ function registerCompletionProvider(monaco: Monaco): IDisposable {
         insertText,
         insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
         range,
-        sortText: `0-${label}`,
+        sortText: `10-${label}`,
       }));
 
       const builtinItems: languages.CompletionItem[] = builtins.map((name) => ({
@@ -272,7 +429,7 @@ function registerCompletionProvider(monaco: Monaco): IDisposable {
         insertText: `${name}($0)`,
         insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
         range,
-        sortText: `1-${name}`,
+        sortText: `20-${name}`,
       }));
 
       const constantItems: languages.CompletionItem[] = constants.map((name) => ({
@@ -281,10 +438,17 @@ function registerCompletionProvider(monaco: Monaco): IDisposable {
         detail: 'Octave constant',
         insertText: name,
         range,
-        sortText: `2-${name}`,
+        sortText: `30-${name}`,
       }));
 
-      return { suggestions: [...snippetItems, ...builtinItems, ...constantItems] };
+      const genericItems = [...snippetItems, ...builtinItems, ...constantItems]
+        .filter((item) => {
+          const label = typeof item.label === 'string' ? item.label : item.label.label;
+          if (seen.has(label)) return false;
+          seen.add(label);
+          return true;
+        });
+      return { suggestions: [...localItems, ...genericItems] };
     },
   });
 }
@@ -315,10 +479,12 @@ function registerInspectionProvider(monaco: Monaco): IDisposable {
             { value: markdownCode(result.display) },
           ],
         };
-      } catch (error) {
-        if (token.isCancellationRequested) return undefined;
-        const message = error instanceof Error ? error.message : 'Inspection failed';
-        return { contents: [{ value: `$(error) ${message.replace(/[<>]/g, '')}` }] };
+      } catch {
+        // Hover inspection is opportunistic. Keywords, function names and
+        // identifiers that do not exist in the current runtime are normal text,
+        // not editor diagnostics. Real lint/runtime errors are rendered by
+        // Monaco's marker hover instead.
+        return undefined;
       }
     },
   });
@@ -345,95 +511,112 @@ export function registerOctaveLanguage(monaco: Monaco): void {
     base: 'vs',
     inherit: true,
     rules: [
-      { token: 'comment.octave', foreground: '66716D', fontStyle: 'italic' },
-      { token: 'keyword.octave', foreground: '735789' },
-      { token: 'keyword.operator.octave', foreground: '343836' },
-      { token: 'support.function.octave', foreground: '2C6E75' },
-      { token: 'constant.octave', foreground: '795D82' },
-      { token: 'number.octave', foreground: '875B28' },
-      { token: 'string.octave', foreground: '4F6B3A' },
-      { token: 'string.escape.octave', foreground: '725329' },
+      { token: 'identifier.octave', foreground: '17211D' },
+      { token: 'comment.octave', foreground: '56665E', fontStyle: 'italic' },
+      { token: 'keyword.octave', foreground: '7E22CE', fontStyle: 'bold' },
+      { token: 'keyword.operator.octave', foreground: '006F9A' },
+      { token: 'support.function.octave', foreground: '007C73' },
+      { token: 'constant.octave', foreground: 'A5144E', fontStyle: 'bold' },
+      { token: 'number.octave', foreground: 'A84400' },
+      { token: 'string.octave', foreground: '357A20' },
+      { token: 'string.escape.octave', foreground: '914800', fontStyle: 'bold' },
       { token: 'string.escape.invalid.octave', foreground: 'B42318' },
-      { token: 'operator.octave', foreground: '343836' },
-      { token: 'delimiter.octave', foreground: '59615E' },
+      { token: 'operator.octave', foreground: '006F9A' },
+      { token: 'delimiter.octave', foreground: '4D5B55' },
     ],
     colors: {
-      'editor.background': '#FAFBFA',
-      'editor.foreground': '#292D2B',
-      'editorLineNumber.foreground': '#7A837F',
-      'editorLineNumber.activeForeground': '#343A37',
-      'editor.lineHighlightBackground': '#F0F3F1',
-      'editor.selectionBackground': '#C9DDE0',
-      'editor.inactiveSelectionBackground': '#E1E9E8',
-      'editorCursor.foreground': '#2C6E75',
-      'editorIndentGuide.background1': '#D9DEDB',
-      'editorIndentGuide.activeBackground1': '#AEB8B3',
-      'editorBracketHighlight.foreground1': '#286C73',
-      'editorBracketHighlight.foreground2': '#72538B',
-      'editorBracketHighlight.foreground3': '#856128',
-      'editorGutter.background': '#FAFBFA',
+      'editor.background': '#FBFCFB',
+      'editor.foreground': '#17211D',
+      'editorLineNumber.foreground': '#697871',
+      'editorLineNumber.activeForeground': '#17211D',
+      'editor.lineHighlightBackground': '#F0F4F2',
+      'editor.selectionBackground': '#B8E1E1',
+      'editor.inactiveSelectionBackground': '#DCEBE8',
+      'editorCursor.foreground': '#007C73',
+      'editorIndentGuide.background1': '#D6DFDA',
+      'editorIndentGuide.activeBackground1': '#8FA39A',
+      'editorBracketHighlight.foreground1': '#00877E',
+      'editorBracketHighlight.foreground2': '#8B2CC4',
+      'editorBracketHighlight.foreground3': '#B45309',
+      'editorGutter.background': '#FBFCFB',
       'editorError.foreground': '#B42318',
       'editorError.border': '#00000000',
       'editorWarning.foreground': '#92610F',
-      'editorInfo.foreground': '#2C6E75',
-      'editorHoverWidget.background': '#FAFBFA',
-      'editorHoverWidget.foreground': '#292D2B',
-      'editorHoverWidget.border': '#BEC7C2',
-      'editorSuggestWidget.background': '#FAFBFA',
-      'editorSuggestWidget.foreground': '#292D2B',
-      'editorSuggestWidget.border': '#BEC7C2',
-      'editorSuggestWidget.selectedBackground': '#DDE9E6',
-      'editorWidget.border': '#BEC7C2',
+      'editorInfo.foreground': '#007C73',
+      'editorHoverWidget.background': '#FBFCFB',
+      'editorHoverWidget.foreground': '#17211D',
+      'editorHoverWidget.border': '#AEBDB5',
+      'editorSuggestWidget.background': '#FBFCFB',
+      'editorSuggestWidget.foreground': '#17211D',
+      'editorSuggestWidget.border': '#9FB2C9',
+      'editorSuggestWidget.highlightForeground': '#1468D4',
+      'editorSuggestWidget.focusHighlightForeground': '#0B57B7',
+      'editorSuggestWidget.selectedBackground': '#D8E6F7',
+      'editorSuggestWidget.selectedForeground': '#101828',
+      'editorSuggestWidget.selectedIconForeground': '#0B57B7',
+      'editorSuggestWidget.statusForeground': '#586A82',
+      'editorWidget.border': '#AEBDB5',
     },
   });
   monaco.editor.defineTheme('octave-dark', {
     base: 'vs-dark',
     inherit: true,
     rules: [
-      { token: 'comment.octave', foreground: '8B9691', fontStyle: 'italic' },
-      { token: 'keyword.octave', foreground: 'C1A7D8' },
-      { token: 'keyword.operator.octave', foreground: 'CDD2CF' },
-      { token: 'support.function.octave', foreground: '8DBBC0' },
-      { token: 'constant.octave', foreground: 'C0A4C7' },
-      { token: 'number.octave', foreground: 'D1AE78' },
-      { token: 'string.octave', foreground: 'A9BF8D' },
-      { token: 'string.escape.octave', foreground: 'D0B77F' },
-      { token: 'string.escape.invalid.octave', foreground: 'FF7B72' },
-      { token: 'operator.octave', foreground: 'CDD2CF' },
-      { token: 'delimiter.octave', foreground: 'AAB2AE' },
+      { token: 'identifier.octave', foreground: 'E8F0EC' },
+      { token: 'comment.octave', foreground: '91A69B', fontStyle: 'italic' },
+      { token: 'keyword.octave', foreground: 'E879F9', fontStyle: 'bold' },
+      { token: 'keyword.operator.octave', foreground: '67E8F9' },
+      { token: 'support.function.octave', foreground: '2DD4BF' },
+      { token: 'constant.octave', foreground: 'FBBF24', fontStyle: 'bold' },
+      { token: 'number.octave', foreground: 'FB923C' },
+      { token: 'string.octave', foreground: 'A3E635' },
+      { token: 'string.escape.octave', foreground: 'FDE047', fontStyle: 'bold' },
+      { token: 'string.escape.invalid.octave', foreground: 'FF6B6B' },
+      { token: 'operator.octave', foreground: '7DD3FC' },
+      { token: 'delimiter.octave', foreground: 'B8C4BE' },
     ],
     colors: {
-      'editor.background': '#191C1B',
-      'editor.foreground': '#DDE2DF',
-      'editorLineNumber.foreground': '#747E79',
-      'editorLineNumber.activeForeground': '#C3CBC7',
-      'editor.lineHighlightBackground': '#212522',
-      'editor.selectionBackground': '#31565B',
-      'editor.inactiveSelectionBackground': '#293D3E',
-      'editorCursor.foreground': '#9BC9CE',
-      'editorIndentGuide.background1': '#333A36',
-      'editorIndentGuide.activeBackground1': '#59645E',
-      'editorBracketHighlight.foreground1': '#83B6BC',
-      'editorBracketHighlight.foreground2': '#B59ACD',
-      'editorBracketHighlight.foreground3': '#C5A66F',
-      'editorGutter.background': '#191C1B',
-      'editorError.foreground': '#FF7B72',
+      'editor.background': '#111714',
+      'editor.foreground': '#E8F0EC',
+      'editorLineNumber.foreground': '#718078',
+      'editorLineNumber.activeForeground': '#E8F0EC',
+      'editor.lineHighlightBackground': '#19211D',
+      'editor.selectionBackground': '#145E63',
+      'editor.inactiveSelectionBackground': '#25443F',
+      'editorCursor.foreground': '#5EEAD4',
+      'editorIndentGuide.background1': '#2A352F',
+      'editorIndentGuide.activeBackground1': '#587064',
+      'editorBracketHighlight.foreground1': '#2DD4BF',
+      'editorBracketHighlight.foreground2': '#E879F9',
+      'editorBracketHighlight.foreground3': '#FBBF24',
+      'editorGutter.background': '#111714',
+      'editorError.foreground': '#FF6B6B',
       'editorError.border': '#00000000',
-      'editorWarning.foreground': '#D8B16B',
-      'editorInfo.foreground': '#8DBBC0',
-      'editorHoverWidget.background': '#222624',
-      'editorHoverWidget.foreground': '#DDE2DF',
-      'editorHoverWidget.border': '#47504B',
-      'editorSuggestWidget.background': '#222624',
-      'editorSuggestWidget.foreground': '#DDE2DF',
-      'editorSuggestWidget.border': '#47504B',
-      'editorSuggestWidget.selectedBackground': '#304642',
-      'editorWidget.border': '#47504B',
+      'editorWarning.foreground': '#FBBF24',
+      'editorInfo.foreground': '#2DD4BF',
+      'editorHoverWidget.background': '#19211D',
+      'editorHoverWidget.foreground': '#E8F0EC',
+      'editorHoverWidget.border': '#415249',
+      'editorSuggestWidget.background': '#19211D',
+      'editorSuggestWidget.foreground': '#E8F0EC',
+      'editorSuggestWidget.border': '#415249',
+      'editorSuggestWidget.highlightForeground': '#5EEAD4',
+      'editorSuggestWidget.focusHighlightForeground': '#99F6E4',
+      'editorSuggestWidget.selectedBackground': '#21423A',
+      'editorSuggestWidget.selectedForeground': '#F4FFF9',
+      'editorSuggestWidget.selectedIconForeground': '#5EEAD4',
+      'editorSuggestWidget.statusForeground': '#A9BBB2',
+      'editorWidget.border': '#415249',
     },
   });
-  if (isNewRuntime) {
-    registerCompletionProvider(monaco);
-    registerInspectionProvider(monaco);
+  // Providers capture the module implementation. Replace them once per HMR
+  // revision so mounted editors receive new completions without a full reload.
+  if (registry.providerRevision !== providerRevision) {
+    registry.completionProvider?.dispose();
+    registry.inspectionProvider?.dispose();
+    registry.completionProvider = registerCompletionProvider(monaco);
+    registry.inspectionProvider = registerInspectionProvider(monaco);
+    registry.providerRevision = providerRevision;
   }
 }
 
@@ -451,5 +634,15 @@ export function bindOctaveInspector(
   registry.inspectors.set(model, binding);
   return () => {
     if (registry.inspectors.get(model) === binding) registry.inspectors.delete(model);
+  };
+}
+
+export function bindOctaveCompletionSources(
+  model: editor.ITextModel,
+  sources: string[],
+): () => void {
+  registry.completionSources.set(model, sources);
+  return () => {
+    if (registry.completionSources.get(model) === sources) registry.completionSources.delete(model);
   };
 }

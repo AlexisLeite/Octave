@@ -10,8 +10,8 @@
 }
 
 .help-dialog {
-  width: min(940px, 100%);
-  height: min(700px, 100%);
+  width: min(1120px, 100%);
+  height: min(780px, 100%);
   min-height: 360px;
   display: flex;
   flex-direction: column;
@@ -133,17 +133,30 @@
   scroll-padding-top: 24px;
 }
 
-.help-content article { width: min(100%, 680px); margin: 0 auto; }
+.help-content article { width: min(100%, 760px); margin: 0 auto; }
 .help-content h1 { margin: 0 0 16px; color: var(--text); font-size: 23px; font-weight: 620; line-height: 1.25; }
-.help-content h2 { margin: 28px 0 9px; color: var(--muted); font-size: 11px; font-weight: 650; letter-spacing: .055em; text-transform: uppercase; }
-.help-content p { margin: 0; color: var(--text); font-size: 14px; line-height: 1.7; }
-.help-content pre { margin: 0; overflow: auto; padding: 14px 16px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); }
+.help-content h2 { margin: 25px 0 9px; color: var(--text); font-size: 16px; font-weight: 620; line-height: 1.35; }
+.help-content h3 { margin: 20px 0 7px; color: var(--text); font-size: 14px; font-weight: 620; }
+.help-content p { margin: 0 0 11px; color: var(--text); font-size: 14px; line-height: 1.72; }
+.help-content ul, .help-content ol { margin: 8px 0 13px; padding-left: 24px; color: var(--text); font-size: 14px; line-height: 1.65; }
+.help-content li + li { margin-top: 4px; }
+.help-content blockquote { margin: 13px 0; padding: 2px 0 2px 14px; border-left: 2px solid var(--accent); color: var(--muted); }
+.help-content blockquote p { color: inherit; }
+.help-content pre { margin: 10px 0; overflow: auto; padding: 12px 14px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); }
 .help-content code { font: 12.5px/1.65 ui-monospace, SFMono-Regular, Consolas, monospace; tab-size: 2; }
+.help-content :not(pre) > code { padding: 1px 4px; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); }
+.help-content .katex-display { margin: 14px 0; overflow-x: auto; overflow-y: hidden; }
+.help-content [data-math-inline] { display: inline-block; max-width: 100%; vertical-align: middle; }
+.help-content [data-math-block] { max-width: 100%; overflow-x: auto; text-align: center; }
+.help-notebook { display: flow-root; }
+.help-narrative + .help-code-block { margin-top: 14px; }
+.help-code-block + .help-narrative { margin-top: 18px; }
 
-.help-example { margin-top: 28px; }
+.help-code-block { margin-top: 22px; }
 .help-example-heading { min-height: 24px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.help-example-heading h2 { margin: 0 0 7px; }
+.help-example-heading h2 { margin: 0 0 7px; color: var(--muted); font-size: 11px; font-weight: 650; letter-spacing: .055em; text-transform: uppercase; }
 .help-example-actions { display: flex; align-items: center; gap: 2px; margin-bottom: 5px; }
+.help-example-actions .loading-dot { margin: 0 5px 0 3px; }
 .help-example-actions button { width: 25px; height: 25px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 4px; color: var(--muted); background: transparent; cursor: pointer; }
 .help-example-actions button:hover:not(:disabled), .help-example-actions button:focus-visible { color: var(--text); background: var(--selection); outline: none; }
 .help-example-editor { overflow: hidden; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); }
@@ -152,6 +165,13 @@
 .help-example-output.error { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); background: color-mix(in srgb, var(--danger-soft) 35%, var(--surface)); }
 .help-example-output pre { padding: 9px 12px; border: 0; border-radius: 0; color: inherit; background: transparent; font-size: 11.5px; white-space: pre-wrap; }
 .help-example-output pre + pre { border-top: 1px solid var(--border); }
+
+.help-tree, .help-content, .help-content pre {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+.help-tree::-webkit-scrollbar, .help-content::-webkit-scrollbar, .help-content pre::-webkit-scrollbar { width: 8px; height: 8px; }
+.help-tree::-webkit-scrollbar-thumb, .help-content::-webkit-scrollbar-thumb, .help-content pre::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 8px; background: var(--border-strong); background-clip: padding-box; }
 
 @media (max-width: 680px) {
   .help-backdrop { padding: 0; }

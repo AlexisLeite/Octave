@@ -2,9 +2,11 @@ import { ChevronDown, ChevronRight, Play, RotateCcw, Search, X } from 'lucide-re
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api'
-import { filterHelpTree, findHelpNode, octaveHelp, type HelpNode } from '../help/octaveHelp'
+import { filterHelpTree, findHelpNode, octaveHelp, type HelpBlock, type HelpNode } from '../help/octaveHelp'
 import type { ExecutionResult } from '../types'
+import { LoadingDot } from './LoadingDot'
 import { OctaveEditor } from './OctaveEditor'
+import { ReadonlyMarkdown } from './ReadonlyMarkdown'
 import './HelpModal.css'
 
 export interface HelpModalProps {
@@ -15,6 +17,10 @@ export interface HelpModalProps {
 interface VisibleNode {
   node: HelpNode
   level: number
+}
+
+function renderedBlocks(node: HelpNode): HelpBlock[] {
+  return node.blocks
 }
 
 const HELP_STORAGE = {
@@ -64,7 +70,7 @@ function firstLeaf(nodes: HelpNode[]): HelpNode | undefined {
   return current?.children?.length ? firstLeaf(current.children) : current
 }
 
-function ExecutableExample({ title, originalCode }: { title: string; originalCode: string }) {
+function ExecutableBlock({ title, originalCode }: { title?: string; originalCode: string }) {
   const [code, setCode] = useState(originalCode)
   const [result, setResult] = useState<ExecutionResult | null>(null)
   const [requestError, setRequestError] = useState<string | null>(null)
@@ -73,14 +79,15 @@ function ExecutableExample({ title, originalCode }: { title: string; originalCod
   async function run() {
     if (running) return
     setRunning(true)
-    setResult(null)
-    setRequestError(null)
     let runtimeId: string | null = null
     try {
       const opened = await api.runtime.open(`help-${crypto.randomUUID()}`)
       runtimeId = opened.runtimeId
-      setResult(await api.runtime.execute(runtimeId, `help-example-${crypto.randomUUID()}`, code))
+      const nextResult = await api.runtime.execute(runtimeId, `help-example-${crypto.randomUUID()}`, code)
+      setResult(nextResult)
+      setRequestError(null)
     } catch (error) {
+      setResult(null)
       setRequestError(error instanceof Error ? error.message : 'No se pudo ejecutar el ejemplo')
     } finally {
       if (runtimeId) await api.runtime.close(runtimeId).catch(() => undefined)
@@ -95,12 +102,13 @@ function ExecutableExample({ title, originalCode }: { title: string; originalCod
   }
 
   return (
-    <section className="help-example">
+    <section className="help-code-block" aria-label={title ?? 'Ejemplo ejecutable'} aria-busy={running}>
       <div className="help-example-heading">
-        <h2>{title}</h2>
+        {title ? <h2>{title}</h2> : <span />}
         <div className="help-example-actions">
-          <button type="button" onClick={() => void run()} disabled={running} title="Ejecutar" aria-label={`Ejecutar ${title}`}><Play size={13} /></button>
-          <button type="button" onClick={reset} title="Restablecer" aria-label={`Restablecer ${title}`}><RotateCcw size={13} /></button>
+          <LoadingDot active={running} />
+          <button type="button" onClick={() => void run()} disabled={running} title={running ? 'Ejecutando…' : 'Ejecutar'} aria-label={`Ejecutar ${title ?? 'bloque'}`}><Play size={13} /></button>
+          <button type="button" onClick={reset} title="Restablecer" aria-label={`Restablecer ${title ?? 'bloque'}`}><RotateCcw size={13} /></button>
         </div>
       </div>
       <div className="help-example-editor">
@@ -154,7 +162,10 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
   useEffect(() => {
     if (!open) return
     openerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
-    const focusTimer = window.setTimeout(() => searchRef.current?.focus(), 0)
+    const focusTimer = window.setTimeout(() => {
+      searchRef.current?.focus()
+      searchRef.current?.select()
+    }, 0)
     return () => {
       window.clearTimeout(focusTimer)
       openerRef.current?.focus()
@@ -347,16 +358,17 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
             {selected && (
               <article key={selected.id}>
                 <h1>{selected.title}</h1>
-                <p>{selected.summary}</p>
-                {selected.syntax?.length ? (
-                  <section aria-labelledby={`${selected.id}-sintaxis`}>
-                    <h2 id={`${selected.id}-sintaxis`}>Sintaxis</h2>
-                    <pre><code>{selected.syntax.join('\n')}</code></pre>
-                  </section>
-                ) : null}
-                {selected.examples.map((item, index) => (
-                  <ExecutableExample key={`${selected.id}-${index}`} title={item.title} originalCode={item.code} />
-                ))}
+                <div className="help-notebook">
+                  {renderedBlocks(selected).map((block, index) => block.kind === 'markdown' ? (
+                    <ReadonlyMarkdown key={`${selected.id}-${index}`} source={block.source} className="help-narrative" />
+                  ) : (
+                    <ExecutableBlock
+                      key={`${selected.id}-${index}`}
+                      title={block.title}
+                      originalCode={block.source}
+                    />
+                  ))}
+                </div>
               </article>
             )}
           </main>

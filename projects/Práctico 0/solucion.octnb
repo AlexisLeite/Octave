@@ -6,27 +6,82 @@
     {
       "id": "47168f9d-249b-4c39-820b-1f49e8e9b917",
       "kind": "markdown",
-      "source": "# Octave\n\nLos siguientes ejercicios están orientados especialmente a aquellos estudiantes que no tengan experiencia previa en Octave."
+      "source": "# Práctico 1: Octave\n\nLos siguientes ejercicios están orientados especialmente a aquellos estudiantes que no tengan experiencia previa en Octave."
     },
     {
       "id": "9ffbfa70-fd26-41c6-917f-bb26c317a17d",
       "kind": "markdown",
-      "source": "## Ejercicio 1 (Funciones)\n\n**a)** Escribir una función llamada `norma` que reciba un vector $v$ y devuelva la norma euclídea de $v$.\n\n**b)** Escribir una función llamada `sustitucion` que reciba como parámetros una matriz $A$, un vector fila $v$ del mismo largo que la cantidad de columnas de $A$, y un número natural $n$, y devuelva la matriz $A$ luego de sustituir la fila $n$ por el vector $v$.\n\n**c)** Escribir una función llamada `intercambio` que reciba como parámetros una matriz $A$ y naturales $n$ y $m$, y devuelva la matriz $A$ luego de intercambiar las filas $n$ y $m$."
+      "source": "## Ejercicio 1 (Funciones)\n\n**a)** Escribir una función llamada `norma` que reciba un vector $v$ y devuelva la norma euclídea de $v$."
     },
     {
       "id": "dd33a0ad-d137-496a-963d-d803a8bb1753",
       "kind": "code",
-      "source": "function norma = norma(v)\r\n  % La norma se calcula como la raíz de la suma del cuadrado de los componentes del vector\r\n  norma = 1\r\nendfunction\r\n\r\ndisp(norma(3))"
+      "source": "function norma = norma(v) \r\n  norma = sqrt(sum(v.^2));\r\nend\r\n\r\nv = 1:15;\r\nheading(\"V\", v)\r\nheading(\"Norma\", norma(v))\r\n\r\n% La anterior es la solución correcta para la función norma, sin embargo para fines ilustrativos, podemos construirla paso a paso usando un for sobre el vector.\r\n\r\nfunction norma_casera = norma_casera(v)\r\n  norma = 0;\r\n  for x = v\r\n    norma = norma + x^2;\r\n  end\r\n  norma_casera = sqrt(norma);\r\nend\r\n\r\ndisp(\"\\nNorma casera\")\r\nnorma_casera(v)"
+    },
+    {
+      "id": "6c3fb164-42ad-46c3-bf4e-71960f5250ee",
+      "kind": "markdown",
+      "source": "**b)** Escribir una función llamada `sustitucion` que reciba como parámetros una matriz $A$, un vector fila $v$ del mismo largo que la cantidad de columnas de $A$, y un número natural $n$, y devuelva la matriz $A$ luego de sustituir la fila $n$ por el vector $v$."
+    },
+    {
+      "id": "14fee94a-3cf2-468e-8066-e02405acd702",
+      "kind": "code",
+      "source": "A = reshape(1:9, 3, 3);\r\nheading(\"A\", A)\r\n\r\nfunction AA = sustitucion(A, v, n)\r\n  AA = A;\r\n  AA(n,:) = v;\r\nend\r\n\r\nV = 15:17;\r\nheading(\"V\", V)\r\n\r\nAA = sustitucion(A, V, 2);\r\nheading(\"Sustitución\", AA);\r\n\r\n% Nuevamente, la solución anterior es correcta, pero para aprender el lenguaje puedo construir otra que sea iterativa elemento a elemento\r\n\r\nfunction AA = sustitucion_casera(A, v, n)\r\n  ancho = size(A, 1);\r\n  AA = A;\r\n\r\n  for i=1:ancho\r\n    AA(n, i) = v(i);\r\n  end\r\nend\r\n\r\nheading(\"Sustitución casera\", sustitucion_casera(A, V, 2));"
+    },
+    {
+      "id": "0748329c-4726-45ba-9c93-8d7e2d77c846",
+      "kind": "markdown",
+      "source": "**c)** Escribir una función llamada `intercambio` que reciba como parámetros una matriz $A$ y naturales $n$ y $m$, y devuelva la matriz $A$ luego de intercambiar las filas $n$ y $m$."
+    },
+    {
+      "id": "4ca98bec-5c8f-4ebb-9117-83c6f06a64ee",
+      "kind": "code",
+      "source": "A = reshape(1:9, 3, 3)';\r\n\r\nfunction intercambio = intercambio(A, n, m)\r\n  N = A(n, :);\r\n  A(n, :) = A(m, :);\r\n  A(m, :) = N;\r\n  intercambio = A;\r\nend\r\n\r\nheading(\"A\", A);\r\nheading(\"Intercambio(A, 1, 2)\", intercambio(A, 1, 2));"
     },
     {
       "id": "6863576d-66ce-4b2d-8a24-4e516767b909",
       "kind": "markdown",
-      "source": "## Ejercicio 2 (If)\n\n**a)** Escribir una función `maximo` que reciba dos reales $a$ y $b$, y devuelva el máximo entre ellos.\n\n**b)** Escribir una función `signo` que reciba un real $x$ y devuelva $1$ si $x > 0$, $0$ si $x = 0$ y $-1$ si $x < 0$.\n\n**c)** Escribir una función `esPar` que reciba un natural $n$ y devuelva $1$ si $n$ es par, o $0$ si es impar.\n\n> **Sugerencia:** la función `mod(n, m)` devuelve el resto de la división entera de $n$ entre $m$."
+      "source": "## Ejercicio 2 (If)\n\n**a)** Escribir una función `maximo` que reciba dos reales $a$ y $b$, y devuelva el máximo entre ellos."
+    },
+    {
+      "id": "27738fca-bc12-4c20-9312-1d300ab50cc5",
+      "kind": "code",
+      "source": "function m = maximo(a, b)\r\n  m = ifelse(a > b, a, b);\r\nend\r\n\r\nheading(\"Máximo\", maximo(1, 2))\r\n\r\n# Además de la construcción ifelse del lenguaje, podemos usar if clásicos\r\n\r\nfunction m = maximo_clasico(a, b)\r\n  if a > b\r\n    m = a;\r\n  else\r\n    m = b;\r\n  end\r\nend\r\n\r\nheading(\"Máximo clásico\", maximo_clasico(3, 5))"
+    },
+    {
+      "id": "a823dd96-f6f2-4788-9761-20e2015581a8",
+      "kind": "markdown",
+      "source": "**b)** Escribir una función `signo` que reciba un real $x$ y devuelva $1$ si $x > 0$, $0$ si $x = 0$ y $-1$ si $x < 0$."
+    },
+    {
+      "id": "e1b22035-b37f-457c-95ec-eb9ec391ee3e",
+      "kind": "code",
+      "source": "function s = signo(x)\r\n  if x == 0\r\n    s = 0;\r\n  elseif x > 0\r\n    s = 1;\r\n  else\r\n    s = -1;\r\n  end\r\nend\r\n\r\nheading(\"Valor: -100\", signo(-1))\r\nheading(\"Valor: 0\", signo(0))\r\nheading(\"Valor: 100\", signo(1))"
+    },
+    {
+      "id": "3c4c100c-0093-459c-a510-53176b0a1d9b",
+      "kind": "markdown",
+      "source": "**c)** Escribir una función `esPar` que reciba un natural $n$ y devuelva $1$ si $n$ es par, o $0$ si es impar.\n\n> **Sugerencia:** la función `mod(n, m)` devuelve el resto de la división entera de $n$ entre $m$."
+    },
+    {
+      "id": "ca7bf199-0746-40a0-898a-231a26a41406",
+      "kind": "code",
+      "source": "function i = esPar(n)\r\n  i = ifelse(mod(n, 2) == 0, 1, 0);\r\nend\r\n\r\nheading(\"Es par: 1\", esPar(1))\r\nheading(\"Es par: 2\", esPar(2))"
     },
     {
       "id": "21ef9cf4-f91e-42ef-9076-e54d19fd04c9",
       "kind": "markdown",
-      "source": "## Ejercicio 3 (For)\n\n**a)** Modificar la función `maximo` del ejercicio anterior para que reciba una matriz $A$ y devuelva el elemento máximo de $A$.\n\n**b)** Escribir una función `serie` que reciba una función $f$ y un natural $N$, y devuelva la suma parcial\n\n$$\n\\sum_{n=0}^{N} f(n).\n$$"
+      "source": "## Ejercicio 3 (For)\n\n**a)** Modificar la función `maximo` del ejercicio anterior para que reciba una matriz $A$ y devuelva el elemento máximo de $A$.\n"
+    },
+    {
+      "id": "d7d386d9-a4e9-40b1-81af-cdaa562fb319",
+      "kind": "code",
+      "source": "function m = maximo(a, b)\r\n  \r\nend"
+    },
+    {
+      "id": "09cd67c0-cdb6-4ca0-a2fe-ccbc1e92f21a",
+      "kind": "markdown",
+      "source": "\r\n\r\n**b)** Escribir una función `serie` que reciba una función $f$ y un natural $N$, y devuelva la suma parcial\r\n\r\n\r\n\r\n$$\r\n\r\n\\sum_{n=0}^{N} f(n).\r\n\r\n$$"
     },
     {
       "id": "709df531-65a3-4868-8ef5-74492b04ec88",
@@ -62,21 +117,56 @@
       "id": "469eafad-3497-4ca6-b4e4-ee67d7f8ffcd",
       "kind": "markdown",
       "source": "## Ejercicio 10 (Método de Gram-Schmidt, GAL 2)\n\nAplicar el método de ortonormalización de Gram-Schmidt a las columnas de la matriz\n\n$$\nA = \\begin{bmatrix}\n2 & 2 & 0 \\\\\n3 & -1 & 0 \\\\\n0 & -2 & 1\n\\end{bmatrix},\n$$\n\ny hallar matrices $Q$ ortogonal y $R$ triangular superior tales que\n\n$$\nA = QR.\n$$"
-    },
-    {
-      "id": "9a4bc901-cb97-4661-82e1-8c06cddc5cfd",
-      "kind": "markdown",
-      "source": "**Ejercicio 3** (For)**.**\n\na) Modificar la funci´on maximo del ejercicio anterior para que reciba una matriz A y devuelva el\\\nelemento m´aximo de A.\n\nb) Escribir una funci´PNon serie que reciba una funci´on f y un natural N y devuelva la suma parcial\\\nn=0 f (n)."
     }
   ],
   "outputs": {
     "dd33a0ad-d137-496a-963d-d803a8bb1753": {
       "cellId": "dd33a0ad-d137-496a-963d-d803a8bb1753",
-      "stdout": "norma = 1\n1\n",
+      "stdout": "V\n    1    2    3    4    5    6    7    8    9   10   11   12   13   14   15\n\nNorma\n35.214\n\nNorma casera\nans = 35.214",
       "stderr": "",
-      "durationMs": 63.960299999976996,
+      "durationMs": 46.0348000000231,
       "error": null,
-      "source": "function norma = norma(v)\r\n  % La norma se calcula la raíz del como la suma del cuadrado de los componentes del vector\r\n  norma = 1\r\nendfunction\r\n\r\ndisp(norma(3))"
+      "source": "function norma = norma(v) \r\n  norma = sqrt(sum(v.^2));\r\nend\r\n\r\nv = 1:15;\r\nheading(\"V\", v)\r\nheading(\"Norma\", norma(v))\r\n\r\n% La anterior es la solución correcta para la función norma, sin embargo para fines ilustrativos, podemos construirla paso a paso usando un for sobre el vector.\r\n\r\nfunction norma_casera = norma_casera(v)\r\n  norma = 0;\r\n  for x = v\r\n    norma = norma + x^2;\r\n  end\r\n  norma_casera = sqrt(norma);\r\nend\r\n\r\ndisp(\"\\nNorma casera\")\r\nnorma_casera(v)"
+    },
+    "4ca98bec-5c8f-4ebb-9117-83c6f06a64ee": {
+      "cellId": "4ca98bec-5c8f-4ebb-9117-83c6f06a64ee",
+      "stdout": "A\n   1   2   3\n   4   5   6\n   7   8   9\n\nIntercambio(A, 1, 2)\n   4   5   6\n   1   2   3\n   7   8   9",
+      "stderr": "",
+      "durationMs": 41.017500000074506,
+      "error": null,
+      "source": "A = reshape(1:9, 3, 3)';\r\n\r\nfunction intercambio = intercambio(A, n, m)\r\n  N = A(n, :);\r\n  A(n, :) = A(m, :);\r\n  A(m, :) = N;\r\n  intercambio = A;\r\nend\r\n\r\nheading(\"A\", A);\r\nheading(\"Intercambio(A, 1, 2)\", intercambio(A, 1, 2));"
+    },
+    "14fee94a-3cf2-468e-8066-e02405acd702": {
+      "cellId": "14fee94a-3cf2-468e-8066-e02405acd702",
+      "stdout": "A\n   1   4   7\n   2   5   8\n   3   6   9\n\nV\n   15   16   17\n\nSustitución\n    1    4    7\n   15   16   17\n    3    6    9\n\nSustitución casera\n    1    4    7\n   15   16   17\n    3    6    9",
+      "stderr": "",
+      "durationMs": 41.48539999965578,
+      "error": null,
+      "source": "A = reshape(1:9, 3, 3);\r\nheading(\"A\", A)\r\n\r\nfunction AA = sustitucion(A, v, n)\r\n  AA = A;\r\n  AA(n,:) = v;\r\nend\r\n\r\nV = 15:17;\r\nheading(\"V\", V)\r\n\r\nAA = sustitucion(A, V, 2);\r\nheading(\"Sustitución\", AA);\r\n\r\n% Nuevamente, la solución anterior es correcta, pero para aprender el lenguaje puedo construir otra que sea iterativa elemento a elemento\r\n\r\nfunction AA = sustitucion_casera(A, v, n)\r\n  ancho = size(A, 1);\r\n  AA = A;\r\n\r\n  for i=1:ancho\r\n    AA(n, i) = v(i);\r\n  end\r\nend\r\n\r\nheading(\"Sustitución casera\", sustitucion_casera(A, V, 2));"
+    },
+    "27738fca-bc12-4c20-9312-1d300ab50cc5": {
+      "cellId": "27738fca-bc12-4c20-9312-1d300ab50cc5",
+      "stdout": "Máximo\n2\n\nMáximo clásico\n5",
+      "stderr": "",
+      "durationMs": 39.420299999881536,
+      "error": null,
+      "source": "function m = maximo(a, b)\r\n  m = ifelse(a > b, a, b);\r\nend\r\n\r\nheading(\"Máximo\", maximo(1, 2))\r\n\r\n# Además de la construcción ifelse del lenguaje, podemos usar if clásicos\r\n\r\nfunction m = maximo_clasico(a, b)\r\n  if a > b\r\n    m = a;\r\n  else\r\n    m = b;\r\n  end\r\nend\r\n\r\nheading(\"Máximo clásico\", maximo_clasico(3, 5))"
+    },
+    "e1b22035-b37f-457c-95ec-eb9ec391ee3e": {
+      "cellId": "e1b22035-b37f-457c-95ec-eb9ec391ee3e",
+      "stdout": "Valor: -100\n-1\n\nValor: 0\n0\n\nValor: 100\n1",
+      "stderr": "",
+      "durationMs": 45.68500000005588,
+      "error": null,
+      "source": "function s = signo(x)\r\n  if x == 0\r\n    s = 0;\r\n  elseif x > 0\r\n    s = 1;\r\n  else\r\n    s = -1;\r\n  end\r\nend\r\n\r\nheading(\"Valor: -100\", signo(-1))\r\nheading(\"Valor: 0\", signo(0))\r\nheading(\"Valor: 100\", signo(1))"
+    },
+    "ca7bf199-0746-40a0-898a-231a26a41406": {
+      "cellId": "ca7bf199-0746-40a0-898a-231a26a41406",
+      "stdout": "Es par: 1\n  0\n\nEs par: 2\n  1",
+      "stderr": "",
+      "durationMs": 52.30319999996573,
+      "error": null,
+      "source": "function i = esPar(n)\r\n  i = ifelse(mod(n, 2) == 0, 1, 0);\r\nend\r\n\r\nheading(\"Es par: 1\", esPar(1))\r\nheading(\"Es par: 2\", esPar(2))"
     }
   }
 }

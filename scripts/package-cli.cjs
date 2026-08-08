@@ -59,6 +59,7 @@ async function doctor(options) {
   const config = readConfig(options.config)
   const octave = await configuredOctave(options.octavePath, config)
   if (!octave) throw new Error(`Octave no fue encontrado. Ejecute "octave-notebook setup" o visite ${OCTAVE_DOWNLOAD}`)
+  if (options.octavePath) writeConfig(options.config, { ...config, octavePath: octave })
   const version = runCapture(octave, ['--version'])
   process.stdout.write(`Node ${process.version}\nOctave ${firstLine(version)}\nEjecutable ${octave}\nConfig ${path.resolve(options.config)}\n`)
 }
@@ -83,7 +84,7 @@ async function setup(options) {
 
 async function configuredOctave(explicit, config) {
   if (explicit) {
-    if (canRun(explicit)) return path.resolve(explicit)
+    if (canRun(explicit)) return resolveExecutable(explicit)
     throw new Error(`El ejecutable indicado no es válido: ${explicit}`)
   }
   if (config.octavePath) {
@@ -175,6 +176,13 @@ function runCapture(command, args) {
   const result = spawnSync(command, args, { encoding: 'utf8', windowsHide: true, timeout: 5000 })
   if (result.error || result.status !== 0) throw new Error(`No se pudo ejecutar ${command}.`)
   return result.stdout || result.stderr || ''
+}
+
+function resolveExecutable(executable) {
+  if (path.isAbsolute(executable) || /[\\/]/.test(executable)) return path.resolve(executable)
+  const resolver = process.platform === 'win32' ? ['where.exe', [executable]] : ['sh', ['-c', 'command -v "$1"', 'sh', executable]]
+  const result = spawnSync(resolver[0], resolver[1], { encoding: 'utf8', windowsHide: true })
+  return result.status === 0 && result.stdout.trim() ? firstLine(result.stdout) : executable
 }
 
 function firstLine(value) { return value.trim().split(/\r?\n/, 1)[0] }
