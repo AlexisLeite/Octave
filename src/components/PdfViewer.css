@@ -46,6 +46,20 @@
   background: #fff;
   box-shadow: 0 1px 4px rgb(0 0 0 / 18%);
   color-scheme: only light;
+  transition: transform 90ms ease-out;
+}
+
+.octave-pdf-render-staging {
+  position: fixed;
+  left: -100000px;
+  top: 0;
+  width: max-content;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .octave-pdf-canvas {

@@ -638,9 +638,11 @@ export async function renderNotebookPdf(document: NotebookDocument): Promise<Buf
           for (const part of outputText(output)) {
             addGap(pdf, 9)
             ensureSpace(pdf, 25)
-            pdf.fillColor(part.color || '#475569').font('Helvetica-Bold').fontSize(9).text(part.label, {
+            const labelTop = pdf.y
+            pdf.fillColor(part.color || '#475569').font('Helvetica-Bold').fontSize(9).text(part.label, PAGE_MARGIN, labelTop, {
               width: CONTENT_WIDTH,
               lineGap: 2,
+              align: 'left',
             })
             addGap(pdf, 4)
             writePreformatted(pdf, part.text, part.color)

@@ -43,6 +43,7 @@ export interface OctaveCompletionSymbol {
   name: string;
   kind: 'variable' | 'parameter' | 'function' | 'field';
   owner?: string;
+  parameters?: string[];
 }
 
 const keywords = [
@@ -104,12 +105,52 @@ const builtins = [
   'isvector', 'legend', 'length', 'linspace', 'load', 'log', 'log10', 'log2', 'logical',
   'logspace', 'lu', 'max', 'mean', 'mesh', 'meshgrid', 'min', 'mod', 'ndims', 'nnz',
   'norm', 'numel', 'ones', 'pinv', 'plot', 'plot3', 'polyfit', 'polyval', 'print', 'printf', 'prod',
-  'qr', 'rand', 'randi', 'randn', 'rank', 'real', 'repmat', 'reshape', 'roots', 'round',
+  'qr', 'rand', 'randi', 'randn', 'randperm', 'rank', 'real', 'repmat', 'reshape', 'rng', 'roots', 'round',
   'save', 'semilogx', 'semilogy', 'sin', 'size', 'sort', 'sparse', 'sprintf', 'sqrt',
   'std', 'stem', 'str2double', 'strcmp', 'strcmpi', 'strfind', 'struct', 'subplot', 'sum',
   'surf', 'svd', 'tan', 'tanh', 'title', 'trapz', 'unique', 'var', 'warning', 'who', 'whos',
   'xlabel', 'xlim', 'ylabel', 'ylim', 'zeros',
 ];
+
+const builtinParameters: Record<string, string[]> = {
+  abs: ['x'], all: ['x', 'dim'], any: ['x', 'dim'], atan2: ['y', 'x'],
+  cat: ['dim', 'A', '...'], cell: ['m', 'n'], cellfun: ['fun', 'C'], char: ['x'],
+  chol: ['A'], class: ['x'], close: ['h'], complex: ['real', 'imag'], cond: ['A', 'p'],
+  conv: ['a', 'b'], diag: ['v', 'k'], diff: ['x', 'n', 'dim'], disp: ['x'], eig: ['A'],
+  error: ['format', '...'], eval: ['code'], eye: ['m', 'n'], fft: ['x', 'n', 'dim'],
+  fft2: ['A', 'm', 'n'], figure: ['n'], filter: ['b', 'a', 'x'], find: ['x', 'k', 'direction'],
+  fprintf: ['format', '...'], fplot: ['fun', 'limits'], fsolve: ['fun', 'x0'], full: ['S'],
+  hist: ['x', 'bins'], ifft: ['x', 'n', 'dim'], ifft2: ['A', 'm', 'n'], imag: ['z'],
+  input: ['prompt'], interp1: ['x', 'y', 'xi', 'method'], inv: ['A'], isequal: ['A', 'B'],
+  isfield: ['S', 'field'], legend: ['labels'], length: ['A'], linspace: ['base', 'limit', 'n'],
+  load: ['file', '...'], logspace: ['a', 'b', 'n'], lu: ['A'], max: ['x', 'y', 'dim'],
+  mean: ['x', 'dim'], meshgrid: ['x', 'y'], min: ['x', 'y', 'dim'], mod: ['x', 'y'],
+  ndims: ['A'], nnz: ['A'], norm: ['A', 'p'], numel: ['A'], ones: ['m', 'n', 'class'],
+  pinv: ['A', 'tol'], plot: ['x', 'y', 'style'], plot3: ['x', 'y', 'z'],
+  polyfit: ['x', 'y', 'degree'], polyval: ['p', 'x'], print: ['file', 'format'],
+  printf: ['format', '...'], prod: ['x', 'dim'], qr: ['A'], rand: ['m', 'n', 'class'],
+  randi: ['bounds', 'm', 'n', 'class'], randn: ['m', 'n', 'class'], randperm: ['n', 'k'],
+  rank: ['A', 'tol'], rng: ['seed', 'generator'],
+  real: ['z'], repmat: ['A', 'm', 'n'], reshape: ['A', 'dims'], roots: ['p'],
+  round: ['x', 'n'], save: ['file', '...'], size: ['A', 'dim'], sort: ['x', 'dim', 'mode'],
+  sparse: ['i', 'j', 'values', 'm', 'n'], sprintf: ['format', '...'], std: ['x', 'weight', 'dim'],
+  str2double: ['text'], strcmp: ['a', 'b'], strcmpi: ['a', 'b'], strfind: ['text', 'pattern'],
+  struct: ['field', 'value', '...'], subplot: ['rows', 'columns', 'index'], sum: ['x', 'dim'],
+  svd: ['A'], title: ['text'], trapz: ['x', 'y', 'dim'], unique: ['x'], var: ['x', 'weight', 'dim'],
+  warning: ['format', '...'], xlabel: ['text'], xlim: ['limits'], ylabel: ['text'],
+  ylim: ['limits'], zeros: ['m', 'n', 'class'],
+};
+
+export function octaveFunctionSignature(name: string, parameters: readonly string[] = []): string {
+  return `${name}(${parameters.join(', ')})`;
+}
+
+export function octaveFunctionSnippet(name: string, parameters: readonly string[] = []): string {
+  const argumentsSnippet = parameters
+    .map((parameter, index) => '${' + (index + 1) + ':' + parameter + '}')
+    .join(', ');
+  return `${name}(${argumentsSnippet})`;
+}
 
 const blockOpenPattern =
   /^(?:\s*)(?:if|for|parfor|while|switch|try|unwind_protect|function|classdef|properties|methods|events|enumeration)\b/i;
@@ -320,7 +361,8 @@ export function collectOctaveSymbols(source: string): OctaveCompletionSymbol[] {
   for (const line of executableOctaveLines(source)) {
     const declaration = /^\s*function\s+(?:(?:\[([^\]]*)\]|([A-Za-z_]\w*))\s*=\s*)?([A-Za-z_]\w*)\s*(?:\(([^)]*)\))?/.exec(line);
     if (declaration) {
-      add({ name: declaration[3], kind: 'function' });
+      const parameters = declaration[4]?.match(/[A-Za-z_]\w*/g) ?? [];
+      add({ name: declaration[3], kind: 'function', parameters });
       addNames(declaration[1] ?? declaration[2], 'variable');
       addNames(declaration[4], 'parameter');
     }
@@ -376,15 +418,23 @@ function registerCompletionProvider(monaco: Monaco): IDisposable {
           if (seen.has(symbol.name)) continue;
           seen.add(symbol.name);
           const isFunction = symbol.kind === 'function';
+          const signature = isFunction
+            ? octaveFunctionSignature(symbol.name, symbol.parameters)
+            : symbol.name;
           localItems.push({
-            label: symbol.name,
+            label: isFunction
+              ? { label: symbol.name, detail: `(${symbol.parameters?.join(', ') ?? ''})` }
+              : symbol.name,
             kind: isFunction
               ? monaco.languages.CompletionItemKind.Function
               : symbol.kind === 'field'
                 ? monaco.languages.CompletionItemKind.Field
                 : monaco.languages.CompletionItemKind.Variable,
-            detail: `${detail} · ${symbol.kind === 'parameter' ? 'parámetro' : symbol.kind}`,
-            insertText: isFunction ? `${symbol.name}($0)` : symbol.name,
+            detail: isFunction
+              ? `${detail} · function · ${signature}`
+              : `${detail} · ${symbol.kind === 'parameter' ? 'parámetro' : symbol.kind}`,
+            documentation: isFunction ? `Firma: ${signature}` : undefined,
+            insertText: isFunction ? octaveFunctionSnippet(symbol.name, symbol.parameters) : symbol.name,
             ...(isFunction ? { insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet } : {}),
             range,
             sortText: `${rank}-${symbol.name}`,
@@ -420,15 +470,20 @@ function registerCompletionProvider(monaco: Monaco): IDisposable {
         sortText: `10-${label}`,
       }));
 
-      const builtinItems: languages.CompletionItem[] = builtins.map((name) => ({
-        label: name,
-        kind: monaco.languages.CompletionItemKind.Function,
-        detail: 'Octave built-in',
-        insertText: `${name}($0)`,
-        insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-        range,
-        sortText: `20-${name}`,
-      }));
+      const builtinItems: languages.CompletionItem[] = builtins.map((name) => {
+        const parameters = builtinParameters[name] ?? ['...'];
+        const signature = octaveFunctionSignature(name, parameters);
+        return {
+          label: { label: name, detail: `(${parameters.join(', ')})` },
+          kind: monaco.languages.CompletionItemKind.Function,
+          detail: `Octave built-in · ${signature}`,
+          documentation: `Firma habitual: ${signature}`,
+          insertText: octaveFunctionSnippet(name, parameters),
+          insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+          range,
+          sortText: `20-${name}`,
+        };
+      });
 
       const constantItems: languages.CompletionItem[] = constants.map((name) => ({
         label: name,

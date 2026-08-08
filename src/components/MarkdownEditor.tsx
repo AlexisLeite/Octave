@@ -20,6 +20,7 @@ import {
   mathNodeViews,
   normalizeClipboardMath,
 } from '../editor/markdownMath'
+import { reconcileEditorValue, recordLocalEditorValue } from '../editor/editorValueSync'
 
 interface MarkdownEditorProps {
   value: string
@@ -162,6 +163,7 @@ export function MarkdownEditor({ value, onChange, onSplitSelection, viewStateKey
   const toolbar = useRef<HTMLDivElement>(null)
   const view = useRef<EditorView | null>(null)
   const onChangeRef = useRef(onChange)
+  const pendingLocalValuesRef = useRef<string[]>([])
   const viewStateKeyRef = useRef(viewStateKey)
   const onSplitSelectionRef = useRef(onSplitSelection)
   const [selectionToolbar, setSelectionToolbar] = useState<SelectionToolbarPosition | null>(null)
@@ -335,6 +337,7 @@ export function MarkdownEditor({ value, onChange, onSplitSelection, viewStateKey
         editor.updateState(next)
         if (transaction.docChanged) {
           const remaining = markdownSerializer.serialize(next.doc)
+          recordLocalEditorValue(pendingLocalValuesRef.current, remaining)
           const extracted = transaction.getMeta('splitMarkdownSelection') as string | undefined
           if (extracted && onSplitSelectionRef.current) {
             onSplitSelectionRef.current(remaining, extracted)
@@ -361,7 +364,9 @@ export function MarkdownEditor({ value, onChange, onSplitSelection, viewStateKey
     const editor = view.current
     if (!editor) return
     const current = markdownSerializer.serialize(editor.state.doc)
-    if (current !== value) {
+    const decision = reconcileEditorValue(pendingLocalValuesRef.current, value, current)
+    pendingLocalValuesRef.current = decision.remainingLocalValues
+    if (decision.applyParentValue) {
       const nextDocument = markdownParser.parse(value || '')
       let selection: ProseMirrorSelection
       try {

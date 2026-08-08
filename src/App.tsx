@@ -7,6 +7,7 @@ import { HelpModal } from './components/HelpModal'
 import { PdfViewer } from './components/PdfViewer'
 import { breadcrumbForCell, extractNotebookHeadings } from './editor/notebookHeadings'
 import { formatOctaveCode } from './editor/octaveFormat'
+import { notebookPdfName } from './editor/notebookFileName'
 import {
   applyNotebookSnapshot,
   createNotebookHistory,
@@ -195,34 +196,56 @@ export default function App() {
     const view = readNotebookViews()[document.id]
     if (!scroller || !view) return
     let cancelled = false
+    let userInteracted = false
+    let focusRestored = false
+    let resizeFrame = 0
 
     const restore = () => {
-      if (cancelled || notebookRef.current !== scroller) return
+      if (cancelled || userInteracted || notebookRef.current !== scroller) return
       activeCellIdRef.current = view.activeCellId && document.cells.some((cell) => cell.id === view.activeCellId)
         ? view.activeCellId
         : null
       const activeElement = globalThis.document.activeElement
-      if (activeCellIdRef.current) {
+      if (activeCellIdRef.current && !focusRestored) {
         const cell = scroller.querySelector<HTMLElement>(`[data-cell-id="${CSS.escape(activeCellIdRef.current)}"]`)
         const canRestoreFocus = !activeElement
           || activeElement === globalThis.document.body
           || Boolean(cell?.contains(activeElement))
         const focusable = cell?.querySelector<HTMLElement>('textarea[aria-label="Octave code"], .ProseMirror[contenteditable="true"]')
-        if (canRestoreFocus) focusable?.focus({ preventScroll: true })
+        if (canRestoreFocus && focusable) {
+          focusable.focus({ preventScroll: true })
+          focusRestored = true
+        }
       }
       // Focusing restores the editor/cursor but must never override the saved
       // notebook viewport. Reapply it in the same frame without animation.
       scroller.scrollTo({ top: view.scrollTop, left: view.scrollLeft, behavior: 'instant' })
     }
 
+    const cancelForUser = () => { userInteracted = true }
+    scroller.addEventListener('pointerdown', cancelForUser, true)
+    scroller.addEventListener('wheel', cancelForUser, { capture: true, passive: true })
+    scroller.addEventListener('keydown', cancelForUser, true)
+
+    const resizeObserver = new ResizeObserver(() => {
+      window.cancelAnimationFrame(resizeFrame)
+      resizeFrame = window.requestAnimationFrame(restore)
+    })
+    scroller.querySelectorAll<HTMLElement>(':scope > .cell').forEach((cell) => resizeObserver.observe(cell))
+
     const frame = window.requestAnimationFrame(() => window.requestAnimationFrame(restore))
-    const settleTimer = window.setTimeout(restore, 120)
-    const editorTimer = window.setTimeout(restore, 420)
+    const restoreTimers = [120, 420, 900, 1600, 2400].map((delay) => window.setTimeout(restore, delay))
+    const settleTimer = window.setTimeout(() => resizeObserver.disconnect(), 3000)
     return () => {
       cancelled = true
       window.cancelAnimationFrame(frame)
+      window.cancelAnimationFrame(resizeFrame)
       window.clearTimeout(settleTimer)
-      window.clearTimeout(editorTimer)
+      restoreTimers.forEach((timer) => window.clearTimeout(timer))
+      resizeObserver.disconnect()
+      scroller.removeEventListener('pointerdown', cancelForUser, true)
+      scroller.removeEventListener('wheel', cancelForUser, true)
+      scroller.removeEventListener('keydown', cancelForUser, true)
     }
   }, [document?.id])
 
@@ -848,7 +871,7 @@ export default function App() {
       const url = URL.createObjectURL(blob)
       const anchor = globalThis.document.createElement('a')
       anchor.href = url
-      anchor.download = `${currentDocument.title || 'notebook'}.pdf`
+      anchor.download = notebookPdfName(path)
       globalThis.document.body.appendChild(anchor)
       anchor.click()
       anchor.remove()

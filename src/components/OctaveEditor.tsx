@@ -16,6 +16,7 @@ import {
   type OctaveInspection,
 } from '../editor/octaveLanguage';
 import { configureLocalMonaco } from '../editor/monacoRuntime';
+import { reconcileEditorValue, recordLocalEditorValue } from '../editor/editorValueSync';
 
 type Monaco = typeof import('monaco-editor');
 
@@ -37,7 +38,7 @@ const MIN_HEIGHT = 32;
 const EMPTY_COMPLETION_SOURCES: string[] = [];
 // Bump when mount-time Monaco listeners change: Fast Refresh preserves the
 // existing editor instance and otherwise leaves the previous handlers alive.
-const EDITOR_MOUNT_REVISION = 'monaco-explicit-height-host-v6';
+const EDITOR_MOUNT_REVISION = 'monaco-monotonic-drafts-v7';
 
 function mapPositionAfterFormatting(
   previous: string,
@@ -90,6 +91,7 @@ export function OctaveEditor({
   const hostRef = useRef<HTMLDivElement | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
   const onRunRef = useRef(onRun);
+  const onChangeRef = useRef(onChange);
   const onFormatRef = useRef(onFormat);
   const onInspectRef = useRef(onInspect);
   const diagnosticsRef = useRef(diagnostics);
@@ -102,8 +104,11 @@ export function OctaveEditor({
   const viewStateTimerRef = useRef(0);
   const lintTimerRef = useRef(0);
   const heightRef = useRef(MIN_HEIGHT);
+  const pendingLocalValuesRef = useRef<string[]>([]);
+  const applyingParentValueRef = useRef(false);
 
   onRunRef.current = onRun;
+  onChangeRef.current = onChange;
   onFormatRef.current = onFormat;
   onInspectRef.current = onInspect;
   diagnosticsRef.current = diagnostics;
@@ -146,6 +151,13 @@ export function OctaveEditor({
     registerOctaveLintCodeActions(monaco);
   }, []);
 
+  const handleModelChange = useCallback((nextValue: string | undefined) => {
+    if (applyingParentValueRef.current) return;
+    const next = nextValue ?? '';
+    recordLocalEditorValue(pendingLocalValuesRef.current, next);
+    onChangeRef.current(next);
+  }, []);
+
   const onMount: OnMount = useCallback((instance, monaco) => {
     editorRef.current = instance;
     monacoRef.current = monaco;
@@ -165,20 +177,24 @@ export function OctaveEditor({
         localStorage.removeItem(editorViewStorageKey);
       }
     }
-    const persistViewState = () => {
+    const saveViewStateNow = () => {
       const storageKey = activeViewStateStorageKeyRef.current;
       if (!storageKey) return;
       window.clearTimeout(viewStateTimerRef.current);
-      viewStateTimerRef.current = window.setTimeout(() => {
-        const state = instance.saveViewState();
-        if (state) localStorage.setItem(storageKey, JSON.stringify(state));
-      }, 100);
+      viewStateTimerRef.current = 0;
+      const state = instance.saveViewState();
+      if (state) localStorage.setItem(storageKey, JSON.stringify(state));
+    };
+    const persistViewState = () => {
+      window.clearTimeout(viewStateTimerRef.current);
+      viewStateTimerRef.current = window.setTimeout(saveViewStateNow, 100);
     };
     instance.onDidChangeCursorSelection(() => {
       persistViewState();
     });
     instance.onDidScrollChange(persistViewState);
     instance.onDidBlurEditorText(persistViewState);
+    window.addEventListener('pagehide', saveViewStateNow);
 
     bindInspector();
     updateMarkers();
@@ -292,6 +308,7 @@ export function OctaveEditor({
     window.addEventListener('resize', resizeForViewport);
     instance.onDidDispose(() => {
       window.removeEventListener('resize', resizeForViewport);
+      window.removeEventListener('pagehide', saveViewStateNow);
       window.clearTimeout(viewStateTimerRef.current);
       const storageKey = activeViewStateStorageKeyRef.current;
       if (storageKey) {
@@ -398,8 +415,11 @@ export function OctaveEditor({
     const instance = editorRef.current;
     const monaco = monacoRef.current;
     const model = instance?.getModel();
-    if (instance && monaco && model && model.getValue() !== value) {
-      const previous = model.getValue();
+    if (!instance || !monaco || !model) return;
+    const previous = model.getValue();
+    const decision = reconcileEditorValue(pendingLocalValuesRef.current, value, previous);
+    pendingLocalValuesRef.current = decision.remainingLocalValues;
+    if (decision.applyParentValue) {
       const selections = instance.getSelections();
       const scrollPosition = {
         scrollLeft: instance.getScrollLeft(),
@@ -424,11 +444,16 @@ export function OctaveEditor({
           position,
         };
       });
-      instance.executeEdits('octave-external-value', [{
-        range: model.getFullModelRange(),
-        text: value,
-        forceMoveMarkers: true,
-      }]);
+      applyingParentValueRef.current = true;
+      try {
+        instance.executeEdits('octave-external-value', [{
+          range: model.getFullModelRange(),
+          text: value,
+          forceMoveMarkers: true,
+        }]);
+      } finally {
+        applyingParentValueRef.current = false;
+      }
       if (mappedSelections?.length) {
         instance.setSelections(mappedSelections.map(({ selectionStart, position }) => new monaco.Selection(
           selectionStart.lineNumber,
@@ -531,7 +556,7 @@ export function OctaveEditor({
       saveViewState={false}
       beforeMount={beforeMount}
       onMount={onMount}
-      onChange={(nextValue) => onChange(nextValue ?? '')}
+      onChange={handleModelChange}
       loading={null}
       options={{
         ariaLabel: 'Octave code',

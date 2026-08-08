@@ -126,7 +126,7 @@
     {
       "id": "e0fd96a0-06f2-432c-9ee3-1242534b52a7",
       "kind": "code",
-      "source": "function x = collatz(m)\r\n  mm = m-1;\r\n  if mod(mm, 2) == 0\r\n    x = mm / 2;\r\n  else\r\n    x = 3 * mm + 1;\r\n  end\r\nend\r\n\r\n\r\nsucesivos abiicsuceivossucesivs \r\n\r\nheading(\"Collatz of 1\", collatz(1));"
+      "source": "function x = collatz(m)\r\n  mm = m;\r\n  if mod(mm, 2) == 0\r\n    x = mm / 2;\r\n  else\r\n    x = 3 * mm + 1;\r\n  end\r\nend\r\n\r\nfunction xs = applyCollatz(maxIter, m)\r\n  xs = [];\r\n\r\n  xs(1) = m;\r\n\r\n  for i = 2:maxIter\r\n    xs(i) = collatz(xs(i-1));\r\n\r\n    if xs(i) == 1\r\n      break;\r\n    end\r\n  end\r\n\r\n  if xs(i) ~= 1\r\n    xs(maxIter+1) = -1;\r\n  end\r\nend\r\n\r\nheading(\"Collatz of 1\", applyCollatz(10, 1));"
     },
     {
       "id": "a5a0f5ce-98bf-4998-8544-40567c370cb7",
@@ -137,6 +137,11 @@
       "id": "5b19f739-373d-48a8-978f-57856241f9e0",
       "kind": "markdown",
       "source": "**c)** Mostrar que usando como semilla cualquier valor de $m$ menor que $1000$ se llega al $1$ en menos de $200$ pasos.\n\n¿Para qué valor $m < 1000$ de semilla es para el que se tiene mayor cantidad de pasos antes de llegar al $1$?"
+    },
+    {
+      "id": "3e48e811-78bd-4c18-8592-0fe2268c4204",
+      "kind": "code",
+      "source": "ok = true;\r\n\r\nfor i = 1:1000\r\n  res = applyCollatz(200, r);\r\n  if res(size(res)(2)) ~= 1\r\n    ok = false;\r\n    break;\r\n  end\r\nend\r\n\r\nheading(\"Passed\", ok)"
     },
     {
       "id": "74c9b877-c099-4a99-948b-328e63563f52",
@@ -250,11 +255,19 @@
     },
     "e0fd96a0-06f2-432c-9ee3-1242534b52a7": {
       "cellId": "e0fd96a0-06f2-432c-9ee3-1242534b52a7",
-      "stdout": "Collatz of 1\n  0",
+      "stdout": "Collatz of 1\n     1   4   2   1",
       "stderr": "",
-      "durationMs": 48.96750000002794,
+      "durationMs": 51.271799999754876,
       "error": null,
-      "source": "function x = collatz(m)\r\n  mm = m-1;\r\n  if mod(mm, 2) == 0\r\n    x = mm / 2;\r\n  else\r\n    x = 3 * mm + 1;\r\n  end\r\nend\r\n\r\nheading(\"Collatz of 1\", collatz(1));"
+      "source": "function x = collatz(m)\r\n  mm = m;\r\n  if mod(mm, 2) == 0\r\n    x = mm / 2;\r\n  else\r\n    x = 3 * mm + 1;\r\n  end\r\nend\r\n\r\nfunction xs = applyCollatz(maxIter, m)\r\n  xs = [];\r\n\r\n  xs(1) = m;\r\n\r\n  for i = 2:maxIter\r\n    xs(i) = collatz(xs(i-1));\r\n\r\n    if xs(i) == 1\r\n      break;\r\n    end\r\n  end\r\n\r\n  if xs(i) ~= 1\r\n    xs(maxIter+1) = -1;\r\n  end\r\nend\r\n\r\nheading(\"Collatz of 1\", applyCollatz(10, 1));"
+    },
+    "3e48e811-78bd-4c18-8592-0fe2268c4204": {
+      "cellId": "3e48e811-78bd-4c18-8592-0fe2268c4204",
+      "stdout": "Passed\n  1",
+      "stderr": "",
+      "durationMs": 473.7365000001155,
+      "error": null,
+      "source": "ok = true;\r\n\r\nfor i = 1:1000\r\n  res = applyCollatz(200, r);\r\n  if res(size(res)(2)) ~= 1\r\n    ok = false;\r\n    break;\r\n  end\r\nend\r\n\r\nheading(\"Passed\", ok)"
     }
   }
 }

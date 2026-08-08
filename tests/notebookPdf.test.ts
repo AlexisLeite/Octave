@@ -49,10 +49,14 @@ describe('renderNotebookPdf', () => {
     const loadingTask = getDocument({ data: new Uint8Array(buffer) })
     const pdf = await loadingTask.promise
     const pageTexts: string[] = []
+    const positionedText: Array<{ text: string; x: number }> = []
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
       const page = await pdf.getPage(pageNumber)
       const content = await page.getTextContent()
       pageTexts.push(content.items.map((item) => 'str' in item ? item.str : '').join(' '))
+      for (const item of content.items) {
+        if ('str' in item) positionedText.push({ text: item.str, x: item.transform[4] })
+      }
     }
     const text = pageTexts.join(' ')
     expect(text).not.toContain('Trabajo de prueba')
@@ -69,6 +73,8 @@ describe('renderNotebookPdf', () => {
     expect(text).not.toContain('\\frac')
     expect(text).not.toContain('\\sqrt')
     expect(text).not.toContain('$$')
+    expect(positionedText.find((item) => item.text === 'Salida')?.x).toBeLessThan(80)
+    expect(positionedText.find((item) => item.text.startsWith('Error'))?.x).toBeLessThan(80)
 
     const metadata = await pdf.getMetadata()
     expect(metadata.info.Title).toBeUndefined()

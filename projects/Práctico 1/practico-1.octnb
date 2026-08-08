@@ -1,0 +1,182 @@
+{
+  "version": 1,
+  "id": "practico-1-punto-flotante-errores",
+  "title": "Práctico 1",
+  "cells": [
+    {
+      "id": "p1-intro",
+      "kind": "markdown",
+      "source": "# Práctico 1 - Punto flotante y errores\n\n**Métodos Numéricos 2026 · Facultad de Ingeniería - IMERL**\n\n> Los ejercicios 10 y 12 son los entregables de este práctico. Todo estudiante inscripto en el curso tendrá asignado un único ejercicio de los prácticos 1, 2 o 3 para entregar antes del comienzo del primer período de parciales. El 18 de setiembre se avisará qué ejercicio corresponde a cada estudiante, por lo que se recomienda fuertemente haber terminado y tener escritos los ejercicios 10 y 12 para esa fecha.\n\n# Punto flotante"
+    },
+    {
+      "id": "p1-exercise-01",
+      "kind": "markdown",
+      "source": "## Ejercicio 1 (Constantes de calculadora)\n\nEncontrar experimentalmente los siguientes valores de tu calculadora:\n\na) El valor $\\varepsilon_M$.\n\nb) El mayor número representable.\n\nc) El menor número positivo representable."
+    },
+    {
+      "id": "p1-code-01",
+      "kind": "code",
+      "source": "% Voy a tratar eM como el valor mínimo que cumple que eM > 0 y 1 + eM > 1.\r\n\r\ni = 2;\r\neM = 1;\r\n\r\ndo\r\n  eMcurr = 1 / 2 ^ i++;\r\n\r\n  if (1 + eMcurr) > 1\r\n    eM = eMcurr;\r\n  else\r\n    break;\r\n  end\r\nuntil false;\r\n\r\nheading(\"em\", eM);\r\nheading(\"iters\", i);"
+    },
+    {
+      "id": "p1-exercise-02",
+      "kind": "markdown",
+      "source": "## Ejercicio 2 (Precisión simple)\n\nEl formato de precisión simple es uno de 32 bits. Los números en dicho formato están definidos por\n\n$$\nx = \\pm(1+f)\\,2^e,\n$$\n\ndonde:\n\n- el signo ocupa 1 bit;\n- la mantisa ocupa 23 bits, esto es, $0 \\le f < 1$ y $2^{23}f$ es un número natural;\n- el exponente ocupa 8 bits, esto es, $-126 \\le e \\le 127$.\n\n¿Cuál es $\\varepsilon_M$ para este formato? ¿Cuáles son los números mayor y menor, en valor absoluto, que pueden representarse?\n\nSe considera $g:\\mathbb{R}\\to\\mathbb{R}$,\n\n$$\ng(x)=\\frac{x^3}{x-\\sin(x)},\n$$\n\ny se toma $x=5\\cdot10^{-4}$. Computar $g(x)$ en Octave.\n\nPor defecto, Octave trabaja con números de precisión doble; el comando `single` convierte una variable a precisión simple. Definir `y = single(x)` y computar $g(y)$ en Octave. ¿Qué resultado se obtiene? Explicar qué está ocurriendo."
+    },
+    {
+      "id": "p1-code-02",
+      "kind": "code",
+      "source": ""
+    },
+    {
+      "id": "p1-exercise-03",
+      "kind": "markdown",
+      "source": "## Ejercicio 3 (Problema 1.35 en Moler)\n\n¿Qué realiza cada uno de estos programas? ¿Cuántas líneas de salida devuelve cada programa? ¿Cuáles son los últimos dos valores de `x` que muestra?\n\n```octave\nx = 1; while 1+x > 1, x = x/2, pause(.02), end\nx = 1; while x+x > x, x = 2*x, pause(.02), end\nx = 1; while x+x > x, x = x/2, pause(.02), end\n```"
+    },
+    {
+      "id": "p1-code-03",
+      "kind": "code",
+      "source": ""
+    },
+    {
+      "id": "p1-exercise-04",
+      "kind": "markdown",
+      "source": "## Ejercicio 4 (Del examen de febrero de 2024)\n\nConsideremos la función $f:\\mathbb{R}\\setminus\\{0\\}\\to\\mathbb{R}$,\n\n$$\nf(x)=\\frac{1-\\cos(x)}{x^2}.\n$$\n\na) Verificar que $\\lim_{x\\to0}f(x)=\\tfrac12$. En adelante consideramos $f:\\mathbb{R}\\to\\mathbb{R}$ como arriba, con $f(0)=\\tfrac12$, y podemos asumir que $f'(0)=0$.\n\nb) Calcular el número de condición de $f$ en $x=0$ y estimar el error inevitable al evaluar $f(x)$ para $x\\approx0$ usando aritmética de punto flotante con precisión doble y redondeo.\n\nc) Se corre el siguiente código de Octave:\n\n```octave\nf = @(x) (1-cos(x))/(x^2);\nvalores = [f(1e-5) f(1e-6) f(1e-7) f(1e-8) f(1e-9)]\n```\n\ny se obtiene la salida\n\n```text\nvalores =\n\n   0.5000   0.5000   0.4996        0        0\n```\n\n¿Por qué se obtienen resultados tan malos al evaluar $f(10^{-8})$ y $f(10^{-9})$?\n\nd) ¿Cómo puede reescribirse $f(x)$ para evaluarla de forma numéricamente estable con $x\\approx0$?"
+    },
+    {
+      "id": "p1-code-04",
+      "kind": "code",
+      "source": ""
+    },
+    {
+      "id": "p1-section-errors",
+      "kind": "markdown",
+      "source": "# Errores"
+    },
+    {
+      "id": "p1-exercise-05",
+      "kind": "markdown",
+      "source": "## Ejercicio 5 (Raíces de polinomio)\n\nHallar las dos raíces del polinomio $x^2+5x+10^{-12}$ con cuatro dígitos de precisión."
+    },
+    {
+      "id": "p1-code-05",
+      "kind": "code",
+      "source": ""
+    },
+    {
+      "id": "p1-exercise-06",
+      "kind": "markdown",
+      "source": "## Ejercicio 6 (Aproximación de la derivada con un cociente incremental)\n\nDada una función $f:I\\to\\mathbb{R}$ de clase $C^\\infty$, donde $I\\subseteq\\mathbb{R}$ es un intervalo, se desea calcular la derivada $f'(a)$ en un punto $a\\in I$ usando un cociente incremental centrado,\n\n$$\n\\delta_a(h)=\\frac{f(a+h)-f(a-h)}{2h}.\n$$\n\na) Usar un desarrollo de Taylor para estimar el error $|\\delta_a(h)-f'(a)|$.\n\nb) Aproximar la derivada de $f(x)=\\sin(5x)$ en $a=1$ con $\\delta_a(h)$, usando $h=0.1^k$ con $k=0,1,\\ldots,20$. Graficar, usando escala logarítmica (`loglog` en Octave), el error absoluto cometido en función de $h$. Explicar el comportamiento observado.\n\nc) Usando los resultados vistos en clase sobre errores de truncamiento y redondeo, estimar el valor óptimo de $h$ para el cálculo anterior. Cotejarlo con el resultado de la parte anterior."
+    },
+    {
+      "id": "p1-code-06",
+      "kind": "code",
+      "source": ""
+    },
+    {
+      "id": "p1-exercise-07",
+      "kind": "markdown",
+      "source": "## Ejercicio 7 (Algoritmo babilonio)\n\nSe desea estimar $\\sqrt2$ con una alta cantidad de acierto en dígitos decimales. Para esto se propone la sucesión $\\{a_n\\}_{n\\ge0}$ tal que $a_0=2$ y\n\n$$\na_{n+1}=\\frac{a_n}{2}+\\frac1{a_n}.\n$$\n\na) Demostrar por inducción completa que $a_n>0$ para todo $n\\in\\mathbb{N}$.\n\nb) Probar que $a_n$ está acotada inferiormente por $\\sqrt2$ y que es decreciente. Concluir que $a_n$ es convergente y que $\\lim_n a_n=\\sqrt2$.\n\nc) Para $e_n=|a_n-\\sqrt2|$, buscar una constante $0<C<1$ tal que $e_{n+1}\\le Ce_n^2$. Notar que esto implica que el error decrece al menos cuadráticamente de una iteración a otra.\n\nd) Demostrar por inducción que $a_n\\in\\mathbb{Q}$ para todo $n\\in\\mathbb{N}$. Por lo tanto, $a_n\\ne\\sqrt2$ para todo $n\\in\\mathbb{N}$.\n\ne) Implementar un programa que calcule $a_n$ usando la recursión inicial escrita como\n\n$$\na_{n+1}=\\left(\\frac{a_n^2+2}{2}\\right)\\frac1{a_n}.\n$$\n\nCon este programa:\n\ni) Analizar la evolución del error $e_n$.\n\nii) Hallar el primer entero positivo $n_0$ tal que la máquina confunde $a_{n_0}$ con $\\sqrt2$."
+    },
+    {
+      "id": "p1-code-07",
+      "kind": "code",
+      "source": ""
+    },
+    {
+      "id": "p1-exercise-08",
+      "kind": "markdown",
+      "source": "## Ejercicio 8 (Cancelación catastrófica y desborde)\n\na) Se desea calcular numéricamente\n\n$$\n\\lim_{n\\to+\\infty}\\int_n^{n+1}\\log(x)\\,dx.\n$$\n\n¿Cómo puede reescribirse la integral para evitar efectos de cancelación catastrófica?\n\nb) Reescribir $e^x/(e^x+1)$ para evaluarla en valores grandes de $x$ evitando efectos de desborde.\n\nc) Comentar los inconvenientes que pueden surgir al calcular la derivada de $\\cos(x)$ con el cociente $[\\cos(x+h)-\\cos(x)]/h$. ¿Cómo puede reescribirse para aproximar la derivada de forma más estable?"
+    },
+    {
+      "id": "p1-code-08",
+      "kind": "code",
+      "source": ""
+    },
+    {
+      "id": "p1-exercise-09",
+      "kind": "markdown",
+      "source": "## Ejercicio 9 (Una recurrencia inestable)\n\nLos números\n\n$$\np_n=\\int_0^1x^ne^x\\,dx\n$$\n\nsatisfacen $p_1>p_2>\\cdots>0$ y la relación de recurrencia, donde $e=2.718\\ldots$ es el número de Euler,\n\n$$\np_{n+1}=e-(n+1)p_n,\\qquad p_1=1.\n$$\n\na) Demostrar la relación de recurrencia.\n\nb) Escribir un programa de Octave que genere los primeros 20 valores de $p_n$ y explicar por qué los resultados no satisfacen la desigualdad anterior.\n\nc) Tomar $p_{20}=1/8$ y usar la recurrencia para computar $p_{19},\\ldots,p_1$. ¿Satisfacen $1=p_1>p_2>\\cdots>0$? Explicar la diferencia entre ambos procedimientos en términos de estabilidad numérica. Repetir con $p_{20}=20$ y $p_{20}=100$, y explicar qué ocurre y por qué."
+    },
+    {
+      "id": "p1-code-09",
+      "kind": "code",
+      "source": ""
+    },
+    {
+      "id": "p1-exercise-10",
+      "kind": "markdown",
+      "source": "## Ejercicio 10 (Otra recurrencia inestable)\n\nDado $n\\in\\mathbb{N}$, consideremos la integral\n\n$$\nI_n=\\int_0^1\\frac{x^n}{5+x}\\,dx.\n$$\n\na) Verificar que $I_0=\\log(6/5)$ y que, para todo $n\\ge1$, se tiene $I_n\\ge0$ y se cumple\n\n$$\nI_n+5I_{n-1}=\\frac1n.\n$$\n\nb) Escribir un programa de Octave que implemente la fórmula de recurrencia anterior y usarlo para calcular $I_{30}$. Analizar el resultado: ¿es confiable? Justificar mediante un análisis de error hacia adelante.\n\nc) Como alternativa, comenzar aproximando $I_{100}=0$ y usar la recurrencia hacia atrás. Computar $I_{30}$ de esta manera. Probar otras aproximaciones iniciales, por ejemplo $I_{100}=0.1$ e $I_{100}=1$. Explicar qué ocurre y por qué."
+    },
+    {
+      "id": "p1-code-10",
+      "kind": "code",
+      "source": ""
+    },
+    {
+      "id": "p1-exercise-11",
+      "kind": "markdown",
+      "source": "## Ejercicio 11 (Fórmula para el área de un triángulo)\n\nEl área de un triángulo $T$ con lados $a,b,c$ puede calcularse mediante\n\n$$\nA(T)=\\sqrt{p(p-a)(p-b)(p-c)},\n$$\n\ndonde $p=(a+b+c)/2$ es la mitad del perímetro de $T$.\n\na) Escribir una función de Octave `A = area(a,b,c)` que use esta fórmula. Las entradas deben ser positivas y cualquiera de ellas debe ser menor que la suma de las otras dos. Si no se cumplen estas condiciones, la función debe arrojar un mensaje de error.\n\nb) Sea $\\delta\\in(0,1)$. Considerar un triángulo rectángulo con catetos $a=1$, $b=\\delta$ e hipotenusa $c=\\sqrt{1+\\delta^2}$. Usar la función anterior para $\\delta=10^{-n}$, $n=1,\\ldots,16$, y computar los errores relativos de las áreas calculadas.\n\nc) Repetir para el triángulo isósceles con lados $a=2$, $b=c=\\sqrt{1+\\delta^2}$ que se obtiene pegando dos triángulos de la parte anterior. Explicar la diferencia entre los resultados de b) y c)."
+    },
+    {
+      "id": "p1-code-11",
+      "kind": "code",
+      "source": ""
+    },
+    {
+      "id": "p1-exercise-12",
+      "kind": "markdown",
+      "source": "## Ejercicio 12 (Extrapolación de Richardson)\n\nLa extrapolación de Richardson permite mejorar el orden del error de truncamiento de una estimación numérica. Supongamos que $p^*$ es un número a estimar y que tenemos una estimación $p_0(h)$ que cumple\n\n$$\np^*=p_0(h)+a_0h^{k_0}+a_1h^{k_1}+\\cdots,\n$$\n\ndonde $a_i\\in\\mathbb{R}$ son constantes desconocidas y las potencias conocidas cumplen $0<k_0<k_1<k_2<\\cdots$. Buscamos producir una nueva aproximación $p_1(h)$ cuyo error de truncamiento sea del orden de $h^{k_1}$. Para $t>0$ se combina $p_0(h)$ con $p_0(h/t)$:\n\n$$\np_1(h)=\\alpha p_0(h)+\\beta p_0(h/t).\n$$\n\na) Hallar $\\alpha$ y $\\beta$ y verificar que\n\n$$\np_1(h)=\\frac{t^{k_0}p_0(h/t)-p_0(h)}{t^{k_0}-1}.\n$$\n\nb) Se sabe que $\\lim_{h\\to0}(1+h)^{1/h}=e$ y que esta es una fórmula de primer orden. Usar Richardson con $t=2$ para obtener una aproximación de $e$ de segundo orden.\n\nc) Verificar lo anterior en Octave: para $h=10^{-2},10^{-3},10^{-4}$, comparar los errores de $e\\simeq(1+h)^{1/h}$ con los del método de la parte anterior."
+    },
+    {
+      "id": "p1-code-12",
+      "kind": "code",
+      "source": ""
+    },
+    {
+      "id": "p1-section-optional",
+      "kind": "markdown",
+      "source": "# Ejercicios opcionales"
+    },
+    {
+      "id": "p1-exercise-13",
+      "kind": "markdown",
+      "source": "## Ejercicio 13 (Derivada con complejos)\n\nEl objetivo es mostrar un truco que permite evaluar derivadas de forma numéricamente estable cuando pueden realizarse cómputos complejos. Sea $f:I\\to\\mathbb{R}$ de clase $C^\\infty$, con $I\\subseteq\\mathbb{R}$, y se desea aproximar $f'(a)$.\n\na) Sea $i$ la unidad imaginaria. Para $h>0$, aproximar $f(a+ih)$ mediante Taylor.\n\nb) Se aproxima $f'(a)$ por\n\n$$\n\\Delta_a(h)=\\operatorname{Im}\\left(\\frac{f(a+ih)}h\\right).\n$$\n\nEstimar el error $|\\Delta_a(h)-f'(a)|$.\n\nc) Repetir las partes b) y c) del Ejercicio 6 para $\\Delta_a(h)$. ¿Qué hace que esta aproximación sea más robusta computacionalmente?"
+    },
+    {
+      "id": "p1-code-13",
+      "kind": "code",
+      "source": ""
+    },
+    {
+      "id": "p1-exercise-14",
+      "kind": "markdown",
+      "source": "## Ejercicio 14 (Serie exponencial)\n\nSe desea calcular la exponencial a partir de\n\n$$\ne^x=1+x+\\frac{x^2}{2!}+\\frac{x^3}{3!}+\\cdots=\\sum_{n=0}^{\\infty}\\frac{x^n}{n!}.\n$$\n\na) Usar el siguiente programa para sumar hasta $n=100$ en un rango de valores de $x$:\n\n```octave\nx=-20:20;\nsum=ones(size(x));\nt=x; n=1;\nwhile n<100\n  sum=sum+t;\n  n=n+1;\n  t=t.*x/n;\nend\n```\n\nb) Investigar el error relativo de los resultados. Usar `exp` y graficar con `semilogy`. ¿Dónde se obtienen los peores resultados? Justificar por qué ocurre.\n\nc) Buscar una forma alternativa y más precisa de hacer el cálculo en los valores problemáticos de la parte anterior."
+    },
+    {
+      "id": "p1-code-14",
+      "kind": "code",
+      "source": ""
+    },
+    {
+      "id": "p1-exercise-15",
+      "kind": "markdown",
+      "source": "## Ejercicio 15 (Overflow en sumas)\n\na) Considerar el siguiente código para calcular $\\sum_{k=1}^n x_k$, donde $x_1,\\ldots,x_n$ son conocidos:\n\n```octave\nsuma = 0;\nfor k = 1:n\n  suma = suma + x(k);\nend\n```\n\nExplicar en qué casos puede dar lugar a cancelaciones catastróficas u overflow. Generar un ejemplo de cada problema.\n\nb) Considerar ahora:\n\n```octave\n[~, ~, m] = find(max(abs(x)));\nx = x/m;\nsuma = 0;\nfor k = 1:n\n  suma = suma + x(k);\nend\nsuma = m*suma;\n```\n\nLa primera línea halla $m=\\max_k|x_k|$. Explicar en qué casos y por qué este código puede evitar un overflow.\n\nc) Usar la idea anterior para escribir código que compute de forma estable la norma euclídea de vectores $x\\in\\mathbb{R}^n$ con $n$ grande."
+    },
+    {
+      "id": "p1-code-15",
+      "kind": "code",
+      "source": ""
+    }
+  ],
+  "outputs": {
+    "p1-code-01": {
+      "cellId": "p1-code-01",
+      "stdout": "em\n  2.2204e-16\n\niters\n  54",
+      "stderr": "",
+      "durationMs": 51.041899999952875,
+      "error": null,
+      "source": "% Voy a tratar eM como el valor mínimo que cumple que eM > 0 y 1 + eM > 1.\r\n\r\ni = 2;\r\neM = 1;\r\n\r\ndo\r\n  eMcurr = 1 / 2 ^ i++;\r\n\r\n  if (1 + eMcurr) > 1\r\n    eM = eMcurr;\r\n  else\r\n    break;\r\n  end\r\nuntil false;\r\n\r\nheading(\"em\", eM);\r\nheading(\"iters\", i);"
+    }
+  }
+}

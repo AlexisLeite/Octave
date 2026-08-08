@@ -122,18 +122,96 @@ R = corrcoef(X);
 q = quantile(x,[0,0.25,0.5,0.75,1]);
 [q, q(4)-q(2)]`, 'Cuantiles e IQR'),
     ], [], ['mean', 'median', 'corrcoef', 'quantile']),
-    topic('numeric-random', 'Aleatoriedad reproducible', [
-      markdown(String.raw`Un generador pseudoaleatorio produce una secuencia determinista según su estado. Fijar la semilla permite repetir una prueba; reiniciarla dentro de un bucle repite la misma muestra.`),
-      code(`rand('state',2026);
-a = rand(1,4);
-rand('state',2026);
-b = rand(1,4);
-[a;b;a==b]`, 'Semilla reproducible'),
-      markdown(String.raw`rand es uniforme y randn normal estándar. Valida una simulación comparando momentos o frecuencias con valores teóricos.`),
-      code(`randn('state',17);
-x = 2 + 3*randn(1,100000);
-[mean(x), std(x)]`, 'Comprobar momentos'),
-    ], [], ['rand', 'randn', 'semilla', 'reproducibilidad']),
+    topic('numeric-random', 'Números, vectores y matrices aleatorias', [
+      markdown(String.raw`**rand** genera números reales pseudoaleatorios con distribución uniforme en el intervalo $[0,1)$. Sin argumentos devuelve un escalar. Sus argumentos de tamaño siguen las convenciones de zeros y ones: rand(n) crea una matriz cuadrada $n\times n$; rand(m,n) crea $m$ filas por $n$ columnas; dimensiones adicionales producen arreglos N-D.
+
+Para pedir una fila usa rand(1,n), para una columna rand(n,1), y para conservar exactamente la forma de otro arreglo usa rand(size(A)).`),
+      code(`rng(11, 'twister');
+
+escalar = rand();
+fila = rand(1, 5);
+columna = rand(5, 1);
+matriz = rand(2, 3);
+cubo = rand(2, 3, 4);
+plantilla = zeros(3, 2);
+mismo_tamano = rand(size(plantilla));
+
+assert(isscalar(escalar));
+assert(isequal(size(fila), [1, 5]));
+assert(isequal(size(columna), [5, 1]));
+assert(isequal(size(matriz), [2, 3]));
+assert(isequal(size(cubo), [2, 3, 4]));
+assert(isequal(size(mismo_tamano), size(plantilla)));`, 'Escalar, vector, matriz y arreglo N-D'),
+
+      markdown(String.raw`Los valores de rand son de tipo **double** por defecto. rand(...,'single') genera punto flotante de precisión simple y rand(...,'double') lo hace explícito. Para una uniforme real en $[a,b)$ transforma $u\sim U(0,1)$ mediante $a+(b-a)u$. Esto genera valores fraccionarios; no lo confundas con generar enteros.`),
+      code(`rng(12, 'twister');
+a = -2.5;
+b = 4.0;
+reales = a + (b - a) * rand(2, 4);
+precision_simple = rand(2, 4, 'single');
+precision_doble = rand(2, 4, 'double');
+
+assert(all(reales(:) >= a & reales(:) < b));
+assert(isa(precision_simple, 'single'));
+assert(isa(precision_doble, 'double'));
+whos reales precision_simple precision_doble`, 'Reales en un intervalo y tipo single/double'),
+
+      markdown(String.raw`**randi(imax,...)** genera enteros desde 1 hasta imax, ambos incluidos. **randi([imin,imax],...)** permite indicar los dos extremos inclusivos. El resultado es double por defecto aunque sus valores sean enteros; agrega un tipo entero como 'uint8' cuando también necesites controlar la representación.`),
+      code(`rng(13, 'twister');
+dado = randi(6);
+tiradas = randi(6, 1, 12);
+temperaturas = randi([-10, 40], 3, 4);
+bytes = randi([0, 255], 2, 5, 'uint8');
+
+assert(dado >= 1 && dado <= 6);
+assert(all(tiradas >= 1 & tiradas <= 6));
+assert(all(temperaturas(:) >= -10 & temperaturas(:) <= 40));
+assert(isa(bytes, 'uint8'));`, 'Enteros aleatorios con randi'),
+
+      markdown(String.raw`**randn** genera una normal estándar, con media 0 y desviación 1. Para obtener una normal de media $\mu$ y desviación $\sigma$, usa mu + sigma*randn(...). Una máscara lógica con probabilidad aproximada p de ser verdadera se obtiene comparando rand(...) < p.`),
+      code(`rng(14, 'twister');
+N = 20000;
+mu = 10;
+sigma = 2;
+muestra_normal = mu + sigma * randn(1, N);
+mascara = rand(4, 5) < 0.30;
+
+assert(abs(mean(muestra_normal) - mu) < 0.08);
+assert(abs(std(muestra_normal) - sigma) < 0.08);
+assert(islogical(mascara));
+[mean(muestra_normal), std(muestra_normal), nnz(mascara)]`, 'Normal y valores lógicos aleatorios'),
+
+      markdown(String.raw`**randperm(n)** devuelve una permutación de 1:n; randperm(n,k) elige k índices distintos sin reemplazo. Es la herramienta adecuada para barajar filas o tomar una muestra sin repetir. Para muestrear con reemplazo, genera índices con randi.`),
+      code(`rng(15, 'twister');
+datos = 10:10:100;
+orden = randperm(numel(datos));
+sin_reemplazo = datos(randperm(numel(datos), 4));
+con_reemplazo = datos(randi(numel(datos), 1, 6));
+
+assert(isequal(sort(datos(orden)), datos));
+assert(numel(unique(sin_reemplazo)) == 4);
+assert(numel(con_reemplazo) == 6);`, 'Barajar y muestrear con randperm'),
+
+      markdown(String.raw`Los generadores son deterministas a partir de su **estado**. rng(semilla,'twister') permite repetir una ejecución completa. Fija la semilla una vez al comienzo de una prueba o simulación y regístrala junto al resultado; no la reinicies dentro de un bucle, porque repetirías la misma subsecuencia.`),
+      code(`rng(2026, 'twister');
+primera = rand(1, 5);
+
+rng(2026, 'twister');
+segunda = rand(1, 5);
+
+assert(isequal(primera, segunda));
+disp(primera);`, 'Semilla y reproducción exacta'),
+
+      markdown(String.raw`**Criterio:** elige la función según el modelo: rand para uniformes reales, randi para enteros, randn para normales y randperm para ordenar o muestrear sin reemplazo. Declara siempre la forma esperada y valida rango, tipo y dimensiones.
+
+**Errores frecuentes:** escribir rand(n) esperando un vector cuando produce una matriz n por n; redondear rand para fabricar enteros y obtener probabilidades sesgadas; confundir valores enteros almacenados como double con tipos integer; o considerar aleatorio seguro para criptografía a un generador diseñado para simulación.
+
+**Ejercicio:** genera una matriz 4 por 6 de reales en $[-3,7)$, un vector columna de 20 enteros entre -5 y 5, y una muestra de 8 índices distintos elegidos entre 1 y 100. Fija una semilla y demuestra que puedes repetir los tres resultados.`),
+    ], [], [
+      'rand', 'randi', 'randn', 'randperm', 'rng', 'semilla', 'reproducibilidad',
+      'uniforme', 'normal', 'entero aleatorio', 'float random', 'single', 'double',
+      'vector aleatorio', 'matriz aleatoria', 'números aleatorios', 'muestreo',
+    ]),
     topic('numeric-monte-carlo', 'Monte Carlo e incertidumbre', [
       markdown(String.raw`Monte Carlo estima esperanzas con muestras. Su error típico decrece como $1/\sqrt{N}$: ganar un decimal puede exigir cien veces más muestras. Reporta semilla, tamaño e incertidumbre.`),
       code(`rand('state',9);

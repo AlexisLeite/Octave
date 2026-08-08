@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   collectOctaveSymbols,
   octaveCommentPrefixAt,
+  octaveFunctionSignature,
+  octaveFunctionSnippet,
   octaveLanguageConfiguration,
 } from './octaveLanguage';
 
@@ -56,7 +58,7 @@ function [valor, indice] = maximo_local(A, columna)
 endfunction
 `);
     expect(symbols).toEqual(expect.arrayContaining([
-      { name: 'maximo_local', kind: 'function' },
+      { name: 'maximo_local', kind: 'function', parameters: ['A', 'columna'] },
       { name: 'A', kind: 'parameter' },
       { name: 'columna', kind: 'parameter' },
       { name: 'valor', kind: 'variable' },
@@ -65,6 +67,17 @@ endfunction
       { name: 'fila', kind: 'variable' },
       { name: 'acumulado', kind: 'variable' },
     ]));
+  });
+
+  it('preserves parameter names for completion labels and snippets', () => {
+    const [localFunction] = collectOctaveSymbols('function y = interpolar(x, puntos, metodo)')
+      .filter((symbol) => symbol.kind === 'function');
+
+    expect(localFunction.parameters).toEqual(['x', 'puntos', 'metodo']);
+    expect(octaveFunctionSignature(localFunction.name, localFunction.parameters))
+      .toBe('interpolar(x, puntos, metodo)');
+    expect(octaveFunctionSnippet(localFunction.name, localFunction.parameters))
+      .toBe('interpolar(${1:x}, ${2:puntos}, ${3:metodo})');
   });
 
   it('collects fields but ignores strings and comments', () => {

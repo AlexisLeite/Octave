@@ -1,3 +1,5 @@
+import { revealHelpCodeResults } from './helpCode'
+
 export interface HelpMarkdownBlock {
   kind: 'markdown'
   source: string
@@ -20,7 +22,11 @@ export interface HelpNode {
 }
 
 export const markdown = (source: string): HelpMarkdownBlock => ({ kind: 'markdown', source })
-export const code = (source: string, title?: string): HelpCodeBlock => ({ kind: 'code', source, title })
+export const code = (source: string, title?: string): HelpCodeBlock => ({
+  kind: 'code',
+  source: revealHelpCodeResults(source),
+  title,
+})
 export const topic = (
   id: string,
   title: string,

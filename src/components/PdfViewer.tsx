@@ -637,10 +637,14 @@ export function PdfViewer({ path, active }: { path: string; active: boolean }) {
     if (!bundle || bundle.path !== path || !pagesRef.current) return;
     const pagesHost = pagesRef.current;
     cancelRendering();
-    pagesHost.replaceChildren();
-    setLoading(true);
+    const hadVisiblePages = Boolean(pagesHost.querySelector(".octave-pdf-page"));
+    if (!hadVisiblePages) setLoading(true);
     setError("");
     let disposed = false;
+    const staging = document.createElement("div");
+    staging.className = "octave-pdf-render-staging";
+    staging.setAttribute("aria-hidden", "true");
+    pagesHost.append(staging);
 
     const renderPage = async (page: PDFPageProxy, pageNumber: number) => {
       if (disposed) return;
@@ -667,7 +671,7 @@ export function PdfViewer({ path, active }: { path: string; active: boolean }) {
       textHost.className = "octave-pdf-text-layer";
       textHost.setAttribute("aria-label", `Texto de la página ${pageNumber}`);
       pageHost.append(textHost);
-      pagesHost.append(pageHost);
+      staging.append(pageHost);
 
       const context = canvas.getContext("2d", { alpha: false });
       if (!context) throw new Error("No se pudo inicializar el canvas del PDF.");
@@ -717,7 +721,16 @@ export function PdfViewer({ path, active }: { path: string; active: boolean }) {
         if (disposed) return;
         const failure = results.find((result): result is PromiseRejectedResult =>
           result.status === "rejected" && !isCancellation(result.reason));
-        if (failure) setError(failure.reason instanceof Error ? failure.reason.message : String(failure.reason));
+        if (failure) {
+          setError(failure.reason instanceof Error ? failure.reason.message : String(failure.reason));
+          setLoading(false);
+          staging.remove();
+          return;
+        }
+        // Commit the fully rendered document in one DOM operation. The prior
+        // canvases stay visible while PDF.js rasterizes the new scale, avoiding
+        // the black flash caused by clearing the page host up front.
+        pagesHost.replaceChildren(...Array.from(staging.children));
         setLoading(false);
         requestAnimationFrame(() => {
           const scroller = scrollerRef.current;
@@ -738,22 +751,48 @@ export function PdfViewer({ path, active }: { path: string; active: boolean }) {
     return () => {
       disposed = true;
       cancelRendering();
-      pagesHost.replaceChildren();
+      staging.remove();
     };
   }, [bundle, path, zoom, cancelRendering]);
 
-  const changeZoom = useCallback((nextZoom: number) => {
+  const changeZoom = useCallback((nextZoom: number, anchor?: { clientX: number; clientY: number }) => {
     const next = clampZoom(nextZoom);
     const scroller = scrollerRef.current;
     const ratio = next / zoomRef.current;
+    if (Math.abs(ratio - 1) < 0.001) return;
+    const bounds = scroller?.getBoundingClientRect();
+    const viewportX = bounds && anchor ? anchor.clientX - bounds.left : (scroller?.clientWidth ?? 0) / 2;
+    const viewportY = bounds && anchor ? anchor.clientY - bounds.top : (scroller?.clientHeight ?? 0) / 2;
     pendingRestoreRef.current = {
       zoom: next,
-      scrollTop: (scroller?.scrollTop ?? 0) * ratio,
-      scrollLeft: (scroller?.scrollLeft ?? 0) * ratio,
+      scrollTop: ((scroller?.scrollTop ?? 0) + viewportY) * ratio - viewportY,
+      scrollLeft: ((scroller?.scrollLeft ?? 0) + viewportX) * ratio - viewportX,
     };
+    // Give immediate visual feedback while the sharp canvases render in a
+    // hidden staging layer. Each preview is based on its own rendered zoom, so
+    // repeated wheel events cannot accumulate a stale transform.
+    pagesRef.current?.querySelectorAll<HTMLElement>(":scope > .octave-pdf-page").forEach((page) => {
+      const renderedZoom = finite(Number(page.dataset.zoom), zoomRef.current);
+      page.style.transform = `scale(${next / renderedZoom})`;
+      page.style.transformOrigin = "top center";
+    });
     zoomRef.current = next;
     setZoom(next);
   }, []);
+
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller || !active) return;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const factor = Math.exp(-event.deltaY * 0.002);
+      changeZoom(zoomRef.current * factor, { clientX: event.clientX, clientY: event.clientY });
+    };
+    scroller.addEventListener("wheel", onWheel, { passive: false });
+    return () => scroller.removeEventListener("wheel", onWheel);
+  }, [active, changeZoom]);
 
   const fitWidth = useCallback(async () => {
     const scroller = scrollerRef.current;

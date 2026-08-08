@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { revealHelpCodeResults } from './helpCode'
 import { filterHelpTree, findHelpNode, octaveHelp, searchHelp, type HelpNode } from './octaveHelp'
 
 function flatten(nodes: HelpNode[]): HelpNode[] {
@@ -41,6 +42,15 @@ describe('octaveHelp', () => {
     ))).toBe(true)
   })
 
+  it('mantiene visibles los resultados de todos los ejemplos', () => {
+    const examples = nodes
+      .flatMap((node) => node.blocks)
+      .filter((block) => block.kind === 'code')
+
+    expect(examples.length).toBeGreaterThanOrEqual(125)
+    expect(examples.every((block) => revealHelpCodeResults(block.source) === block.source)).toBe(true)
+  })
+
   it('documenta for en profundidad y con múltiples bloques ejecutables', () => {
     const forTopics = nodes.filter((node) => node.id.includes('programacion-for'))
     const forCodeBlocks = forTopics.flatMap((node) => node.blocks).filter((block) => block.kind === 'code')
@@ -67,7 +77,7 @@ describe('octaveHelp', () => {
     const firstExample = constants?.blocks.find((block) => block.kind === 'code')
 
     expect(constants?.blocks.filter((block) => block.kind === 'code')).toHaveLength(4)
-    expect(firstExample?.source).toContain("fprintf('pi = %.15f\\n', pi);")
+    expect(firstExample?.source).toContain("fprintf('pi = %.15f\\n', pi)")
     expect(firstExample?.source).not.toContain("fprintf('pi = %.15f\n")
     expect(constants?.keywords).toEqual(expect.arrayContaining([
       'e', 'Euler', 'pi', 'Inf', 'NaN', 'eps', 'realmin', 'realmax',
@@ -75,6 +85,27 @@ describe('octaveHelp', () => {
     expect(searchHelp(octaveHelp, 'e')[0].node.id).toBe('fundamentos-constantes')
     expect(searchHelp(octaveHelp, 'euler')[0].node.id).toBe('fundamentos-constantes')
     expect(searchHelp(octaveHelp, 'pi')[0].node.id).toBe('fundamentos-constantes')
+  })
+
+  it('documenta rand para escalares, vectores, matrices, enteros y floats', () => {
+    const random = findHelpNode(octaveHelp, 'numeric-random')
+    const codeSource = random?.blocks
+      .filter((block) => block.kind === 'code')
+      .map((block) => block.source)
+      .join('\n') ?? ''
+
+    expect(random?.blocks.filter((block) => block.kind === 'code')).toHaveLength(6)
+    expect(random?.keywords).toEqual(expect.arrayContaining([
+      'rand', 'randi', 'randn', 'randperm', 'rng', 'single', 'double',
+      'vector aleatorio', 'matriz aleatoria',
+    ]))
+    expect(codeSource).toContain('rand(1, 5)')
+    expect(codeSource).toContain('rand(5, 1)')
+    expect(codeSource).toContain("rand(2, 4, 'single')")
+    expect(codeSource).toContain('randi([-10, 40], 3, 4)')
+    expect(searchHelp(octaveHelp, 'rand')[0].node.id).toBe('numeric-random')
+    expect(searchHelp(octaveHelp, 'randi')[0].node.id).toBe('numeric-random')
+    expect(searchHelp(octaveHelp, 'matriz aleatoria')[0].node.id).toBe('numeric-random')
   })
 
   it('busca sin depender de mayúsculas ni tildes y conserva ancestros', () => {
