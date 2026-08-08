@@ -1,0 +1,145 @@
+Métodos Numéricos 2026                                          Facultad de Ingenierı́a – IMERL
+
+
+                                  Práctico 0 – Octave y repaso
+
+Octave
+   Los siguientes ejercicios están orientados especialmente a aquellos estudiantes que no tengan
+experiencia previa en Octave.
+
+
+Ejercicio 1 (Funciones).
+
+a) Escribir una función llamada norma que reciba un vector v y devuelva la norma euclı́dea de v.
+
+b) Escribir una función llamada sustitucion que reciba como parámetros una matriz A, un vector
+   fila v del mismo largo que la cantidad de columnas de A, y un número natural n, y devuelva la
+   matriz A luego de sustituir la fila n por el vector v.
+
+c) Escribir una función llamada intercambio que reciba como parámetros una matriz A y naturales
+   n y m, y devuelva la matriz A luego de intercambiar las filas n y m.
+
+
+Ejercicio 2 (If).
+
+a) Escribir una función maximo que reciba dos reales a y b, y devuelva el máximo entre ellos.
+
+b) Escribir una función signo que reciba un real x y devuelva 1 si x> 0, 0 si x= 0 y -1 si x< 0.
+
+c) Escribir una función esPar que reciba un natural n y devuelva 1 si n es par, o 0 si es impar.
+   [Sugerencia: la función mod(n,m) devuelve el resto de la división entera de n entre m.]
+
+
+
+Ejercicio 3 (For).
+
+a) Modificar la función maximo del ejercicio anterior para que reciba una matriz A y devuelva el
+   elemento máximo de A.
+
+   Escribir una función serie que reciba una función f y un natural N y devuelva la suma parcial
+b) P
+     N
+     n=0 f (n).
+
+
+
+
+                                              PN que reciba una función decreciente f y un real
+Ejercicio 4 (While). Escribir una función serie2
+positivo epsilon y devuelva la suma parcial n=0 f (n), donde N es el primer natural tal que
+f(N)<epsilon.
+
+
+Ejercicio 5 (Fibonacci). La sucesión de Fibonacci se define de la siguiente forma:
+
+                           f0 = 1,    f1 = 1,    y   fn+1 = fn + fn−1 ∀n ≥ 1.
+
+a) Escribir una funión fibonacci que reciba un número natural n y devuelva un vector conteniendo
+   los primeros n+1 números en la sucesión de Fibonacci.
+Métodos Numéricos 2026                                            Facultad de Ingenierı́a – IMERL
+
+                                                           √
+b) Demostrar que, cuando n → ∞, fn+1
+                                 fn → φ =
+                                          1+ 5
+                                            2  (el llamado número áureo). Usar la función
+   fibonacci para calcular, en forma vectorizada los cocientes ff10 . . . ff20
+                                                                            19
+                                                                               .
+
+
+Ejercicio 6 (Collatz). La conjetura de Collatz es uno de los problemas sin resolver más famosos
+en matemática, y consiste en preguntarse si la repetición de dos operaciones aritméticas simples
+eventualmente transforma cualquier número natural en 1. Se considera la función f : N → N,
+                                            m
+                                       
+                                             2        si m es par,
+                               f (m) =
+                                         3m + 1 si m es impar,
+
+y se define una sucesión mediante a0 = m (con m un número a elegir, al que llamaremos semilla)
+y an+1 = f (an ) para todo n ≥ 0.
+a) Notar que si se toma la semilla m = 1, se obtiene el ciclo
+
+                                             1 7→ 4 7→ 2 7→ 1 7→ . . . .
+
+b) Escribir una función collatz que reciba un número natural m y devuelva un vector conteniendo
+   los elementos de la sucesión {an } obtenida al usar m como semilla hasta que se llegue al valor 1.
+   Para evitar que el programa corra indefinidamente, establecer una cota superior a la cantidad
+   de veces que se puede aplicar f .
+
+c) Mostrar que usando como semilla cualquier valor de m menor que 1000 se llega al 1 en menos de
+   200 pasos. ¿Para qué valor m< 1000 de semilla es para el que se tiene mayor cantidad de pasos
+   antes de llegar al 1?
+
+
+Repaso
+   Los siguientes ejercicios tocan contenidos cubiertos en cursos que son previaturas de éste.
+
+
+Ejercicio 7 (Taylor en una variable, CDIV). Para cada una de las siguientes funciones, hallar el
+polinomio de Taylor en el punto x0 y del orden n indicado:
+                                               1
+                                     f (x) =      , x0 = 0,                n = 3,
+                                             1+x
+                                    f (x) = cos(x), x0 = π/2,              n = 4,
+                                                     x
+                                        f (x) = e ,      x0 = 0,   n ∈ N,
+                                                     5
+                                                              √
+                              f (x) = 1 − 3x + x ,       x0 = 17, n = 23.
+
+
+Ejercicio 8 (Taylor en varias variables, CDIVV). Para cada una de las siguientes funciones, hallar
+el polinomio de Taylor en el punto (x0 , y0 ) y del orden n indicado:
+                                            y
+                                f (x, y) =    , (x0 , y0 ) = (1, 1), n = 2,
+                                            x
+                                f (x, y) = ex , (x0 , y0 ) = (0, 8), n = 4.
+Métodos Numéricos 2026                                 Facultad de Ingenierı́a – IMERL
+
+
+Ejercicio 9 (Escalerización gaussiana, GAL 1). Resolver los siguientes sistemas de ecuaciones
+usando el método de escalerización gaussiana:
+                                       
+                 −x +  y − z = 1        2x + y + z = 3
+                                                            (
+                                                                x + 2y − z = 1
+               
+                                       
+                4x + 2y − z = 5 ,         x − y − 2z = 3 ,                     .
+                                                            2x + 4y − 2z = 0
+                   x+y+z =5                   y − 5z = −1
+                                       
+
+
+
+Ejercicio 10 (Método de Gram-Schmidt, GAL 2). Aplicar el método de ortonormalización de
+Gram-Schmidt a las columnas de las matriz
+                                                
+                                          2 3  0
+                                    A = 2 −1 −2 ,
+                                          0 0  1
+
+y hallar matrices Q ortogonal y R triangular superior tales que A = QR.
+

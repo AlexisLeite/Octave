@@ -1,0 +1,10 @@
+interface:
+  display_name: "Console Monitor Usage"
+  short_description: "Inspect and restart relevant monitored consoles"
+  default_prompt: "Use $console-monitor-usage to inspect a relevant monitored console through MCP."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "console-monitor"
+      description: "Console monitor MCP server"

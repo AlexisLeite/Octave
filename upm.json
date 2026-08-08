@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 2,
+  "configTomlPath": "%USERPROFILE%\\.codex\\config.toml",
+  "codexPath": ".codex",
+  "packages": {
+    "@focus.matters/console-monitor": {
+      "version": "0.2.7",
+      "resources": {
+        "commands": [
+          "cm"
+        ],
+        "mcpServers": [
+          "console-monitor"
+        ],
+        "skills": [
+          "console-monitor-usage"
+        ],
+        "manuals": []
+      }
+    }
+  },
+  "paths": {
+    "commands": ".upm/bin"
+  }
+}

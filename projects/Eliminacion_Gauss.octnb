@@ -1,0 +1,87 @@
+{
+  "version": 1,
+  "id": "117a05bb-64fd-4b83-933d-302a4a641e15",
+  "title": "Eliminaci�n de Gauss",
+  "outputs": {
+    "dcb135dd-ae29-463a-a449-15553093e47a": {
+      "cellId": "dcb135dd-ae29-463a-a449-15553093e47a",
+      "stdout": "Matriz aumentada inicial [G | i]:\n           10           -2            0           -1           40\n           -2            9           -3            0           11\n            0           -3            8           -1            3\n           -1            0           -1            6           17\n",
+      "stderr": "",
+      "durationMs": 39.730500000001484,
+      "error": null
+    },
+    "e2da4522-9134-48be-8d79-8abbe44e80ba": {
+      "cellId": "e2da4522-9134-48be-8d79-8abbe44e80ba",
+      "stdout": "Despu?s del pivote 1:\n           10           -2            0           -1           40\n            0          8.6           -3         -0.2           19\n            0           -3            8           -1            3\n            0         -0.2           -1          5.9           21\nDespu?s del pivote 2:\n           10           -2            0           -1           40\n            0          8.6           -3         -0.2           19\n            0            0       6.9535      -1.0698       9.6279\n            0            0      -1.0698       5.8953       21.442\nDespu?s del pivote 3:\n           10           -2            0           -1           40\n            0          8.6           -3         -0.2           19\n            0            0       6.9535      -1.0698       9.6279\n            0            0            0       5.7308       22.923\n",
+      "stderr": "",
+      "durationMs": 44.5640999999996,
+      "error": null
+    },
+    "638d9c63-1440-46da-92f4-66c816843a53": {
+      "cellId": "638d9c63-1440-46da-92f4-66c816843a53",
+      "stdout": "Voltajes nodales [V]:\nv1 = 5.000000 V\nv2 = 3.000000 V\nv3 = 2.000000 V\nv4 = 4.000000 V\n",
+      "stderr": "",
+      "durationMs": 36.42550000000119,
+      "error": null
+    },
+    "f346f0b6-19da-49bb-baae-35fb2cc27841": {
+      "cellId": "f346f0b6-19da-49bb-baae-35fb2cc27841",
+      "stdout": "Norma infinita del residuo: 3.553e-15 mA\nDiferencia respecto a G  i: 8.882e-16 V\nN?mero de condici?n de G: 2.862\n",
+      "stderr": "warning: unrecognized escape sequence '\\ ' -- converting to ' '\nwarning: called from\n    C:/Users/alexi/AppData/Local/Temp/octave-runtime-yo0HX9/cell-f346f0b6-19da-49bb-baae-35fb2cc27841-dd81e2de-ea6b-4df2-abed-d6ab85490cd0.m at line 5 column 1\n\n",
+      "durationMs": 43.90200000000186,
+      "error": null
+    }
+  },
+  "cells": [
+    {
+      "id": "83e12b37-c481-4acc-a091-64476ec7b77f",
+      "kind": "markdown",
+      "source": "# Eliminaci�n de Gauss con pivoteo parcial\n\nEn an�lisis nodal de circuitos, las leyes de Kirchhoff producen un sistema lineal Gv = i. La matriz G contiene conductancias, v contiene los voltajes de los nodos e i las corrientes inyectadas.\n\nSe resolver� una red de cuatro nodos mediante escalonamiento y sustituci�n hacia atr�s, sin usar inicialmente el operador `A \\ b` de Octave."
+    },
+    {
+      "id": "14623202-478d-4769-9ca5-3ec5419b58c6",
+      "kind": "markdown",
+      "source": "## 1. Sistema de ecuaciones\n\nSi las conductancias se expresan en mS y las corrientes en mA, el resultado se obtiene directamente en voltios. La matriz es diagonalmente dominante, una propiedad habitual en redes resistivas bien conectadas."
+    },
+    {
+      "id": "dcb135dd-ae29-463a-a449-15553093e47a",
+      "kind": "code",
+      "source": "format short g\n\n% G [mS] e i [mA]\nG = [10, -2,  0, -1; ...\n     -2,  9, -3,  0; ...\n+      0, -3,  8, -1; ...\n+     -1,  0, -1,  6];\ni = [40; 11; 3; 17];\n\nAb = [G, i];\ndisp('Matriz aumentada inicial [G | i]:');\ndisp(Ab);"
+    },
+    {
+      "id": "ff70d340-63d7-456f-9751-ac2d260c0ac0",
+      "kind": "markdown",
+      "source": "## 2. Escalonamiento\n\nEn la columna k se elige como pivote el elemento de mayor magnitud disponible. Intercambiar filas reduce el error num�rico cuando un pivote es peque�o. Luego se resta a cada fila inferior un m�ltiplo de la fila pivote para crear ceros debajo de la diagonal."
+    },
+    {
+      "id": "e2da4522-9134-48be-8d79-8abbe44e80ba",
+      "kind": "code",
+      "source": "n = rows(G);\nE = Ab;\n\nfor k = 1:n-1\n  % Pivoteo parcial\n  [pivot_size, relative_row] = max(abs(E(k:n, k)));\n  pivot_row = k + relative_row - 1;\n\n  if pivot_size < eps\n    error('El sistema es singular o est� mal condicionado');\n  endif\n\n  if pivot_row != k\n    E([k, pivot_row], :) = E([pivot_row, k], :);\n  endif\n\n\n  % Eliminaci�n debajo del pivote\n  for row = k+1:n\n    multiplier = E(row, k) / E(k, k);\n    E(row, k:end) = E(row, k:end) - multiplier * E(k, k:end);\n    E(row, k) = 0;\n  endfor\n\n  fprintf('Despu�s del pivote %d:\\n', k);\n  disp(E);\nendfor\n\nU = E(:, 1:n);\nc = E(:, end);"
+    },
+    {
+      "id": "1d1adc29-7a24-4061-a1bc-9b9f96c760f0",
+      "kind": "markdown",
+      "source": "## 3. Sustituci�n hacia atr�s\n\nLa matriz U ya es triangular superior. Se calcula primero la �ltima inc�gnita y luego se avanza hacia arriba, descontando en cada fila las componentes conocidas."
+    },
+    {
+      "id": "638d9c63-1440-46da-92f4-66c816843a53",
+      "kind": "code",
+      "source": "v = zeros(n, 1);\n\nfor row = n:-1:1\n  known_part = U(row, row+1:n) * v(row+1:n);\n  v(row) = (c(row) - known_part) / U(row, row);\nendfor\n\ndisp('Voltajes nodales [V]:');\nfor node = 1:n\n  fprintf('v%d = %.6f V\\n', node, v(node));\nendfor"
+    },
+    {
+      "id": "05716d53-871c-4f1f-a5b9-d50f488be60c",
+      "kind": "markdown",
+      "source": "## 4. Verificaci�n num�rica\n\nEl residuo r = Gv - i mide cu�nto incumple la soluci�n las ecuaciones originales. Tambi�n se compara el resultado con el solucionador interno de Octave y se calcula el n�mero de condici�n."
+    },
+    {
+      "id": "f346f0b6-19da-49bb-baae-35fb2cc27841",
+      "kind": "code",
+      "source": "residual = G*v - i;\nv_octave = G \\ i;\n\nfprintf('Norma infinita del residuo: %.3e mA\\n', norm(residual, inf));\nfprintf('Diferencia respecto a G \\ i: %.3e V\\n', norm(v - v_octave, inf));\nfprintf('N�mero de condici�n de G: %.3f\\n', cond(G));"
+    },
+    {
+      "id": "b978998a-aa11-456c-a60f-0f402f398b98",
+      "kind": "markdown",
+      "source": "## Resultado\n\nEl algoritmo requiere aproximadamente O(n�) operaciones para escalonar y O(n�) para sustituir. El pivoteo parcial mejora la estabilidad sin cambiar ese orden de complejidad. Para matrices grandes y dispersas se prefieren factorizaciones especializadas, pero este procedimiento muestra la base del solucionador lineal."
+    }
+  ]
+}

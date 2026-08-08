@@ -1,0 +1,42 @@
+{
+  "name": "octave-notebook",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": ".\\.upm\\bin\\cm.cmd run --id octave-notebook-dev --cwd . -- pnpm dev:raw",
+    "dev:raw": "concurrently -k -n api,ui -c cyan,magenta \"pnpm dev:api\" \"pnpm dev:ui\"",
+    "dev:api": "tsx watch server/index.ts",
+    "dev:ui": "vite",
+    "build": "tsc -b && vite build",
+    "start": "tsx server/index.ts",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
+    "express": "^5.1.0",
+    "lucide-react": "^0.468.0",
+    "monaco-editor": "^0.52.2",
+    "prosemirror-commands": "^1.7.1",
+    "prosemirror-history": "^1.4.1",
+    "prosemirror-keymap": "^1.2.3",
+    "prosemirror-markdown": "^1.13.1",
+    "prosemirror-model": "^1.24.1",
+    "prosemirror-state": "^1.4.3",
+    "prosemirror-view": "^1.38.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.5.0",
+    "concurrently": "^9.2.0",
+    "tsx": "^4.20.0",
+    "typescript": "~5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.0"
+  }
+}

@@ -1,0 +1,64 @@
+{
+  "name": "@focus.matters/console-monitor",
+  "version": "0.2.7",
+  "description": "Run and monitor long-lived console commands from agents over TCP and MCP.",
+  "type": "module",
+  "bin": {
+    "cm": "./bin/cm.js",
+    "console-monitor": "./bin/cm.js",
+    "console-monitor-mcp": "./bin/console-monitor-mcp.js"
+  },
+  "files": [
+    "post-install.mjs",
+    "bin",
+    "src",
+    "etc",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "util-package": {
+    "commands": {
+      "cm": {
+        "path": "bin/cm.js",
+        "description": "Run arbitrary commands and expose their console output through the local console index."
+      }
+    },
+    "mcpServers": {
+      "console-monitor": {
+        "command": "npx",
+        "args": [
+          "-y",
+          "@focus.matters/console-monitor",
+          "mcp"
+        ],
+        "description": "List and read console processes launched with cm run."
+      }
+    },
+    "skills": {
+      "console-monitor-usage": {
+        "path": "etc/skills/console-monitor-usage",
+        "uses": [
+          "mcp:console-monitor"
+        ],
+        "description": "Agent instructions for consuming the console-monitor MCP server."
+      }
+    },
+    "manuals": {}
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.25.76"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED",
+  "gitHead": "f866b7ee0e0b98b4d9525fcb71185029df8a4996",
+  "scripts": {
+    "start": "node ./bin/cm.js",
+    "install-local": "node ./src/install.js",
+    "mcp": "node ./bin/console-monitor-mcp.js"
+  }
+}
