@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Braces, CircleHelp, FilePlus2, FolderPlus, Moon, Pencil, Play, Plus, Printer, RotateCcw, Save, Sun, Trash2, Type } from 'lucide-react'
-import { api, startRuntimeHeartbeat } from './api'
+import { api, startRuntimeHeartbeat, type BackendConnectionStatus } from './api'
 import { Cell } from './components/Cell'
 import { FileTree, type CreatingNode } from './components/FileTree'
 import { HelpModal } from './components/HelpModal'
@@ -17,6 +17,52 @@ import {
   type NotebookHistory,
 } from './editor/notebookHistory'
 import type { ExecutionResult, NotebookCell, NotebookDocument, TreeNode } from './types'
+
+function AnimatedBreadcrumb({ path }: { path: string[] }) {
+  const [visiblePath, setVisiblePath] = useState(path)
+  const [phase, setPhase] = useState<'idle' | 'leaving' | 'replace'>('idle')
+  const visiblePathRef = useRef(path)
+
+  useEffect(() => {
+    if (visiblePathRef.current.length === path.length
+      && visiblePathRef.current.every((part, index) => part === path[index])) return
+
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      visiblePathRef.current = path
+      setVisiblePath(path)
+      setPhase('idle')
+      return
+    }
+
+    setPhase('leaving')
+    let frame = 0
+    const timer = window.setTimeout(() => {
+      visiblePathRef.current = path
+      setVisiblePath(path)
+      setPhase('replace')
+      frame = window.requestAnimationFrame(() => setPhase('idle'))
+    }, 180)
+
+    return () => {
+      window.clearTimeout(timer)
+      window.cancelAnimationFrame(frame)
+    }
+  }, [path])
+
+  return (
+    <nav
+      className={`document-breadcrumb breadcrumb-${phase}`}
+      aria-label="Ubicación en el documento"
+      title={visiblePath.join(' / ')}
+    >
+      <ol>
+        {visiblePath.map((part, index) => (
+          <li key={`${index}-${part}`} aria-current={index === visiblePath.length - 1 ? 'location' : undefined}>{part}</li>
+        ))}
+      </ol>
+    </nav>
+  )
+}
 
 function uid() {
   return crypto.randomUUID()
@@ -76,6 +122,7 @@ export default function App() {
   const [openedPdfs, setOpenedPdfs] = useState<string[]>([])
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [backendConnection, setBackendConnection] = useState<BackendConnectionStatus>('offline')
   const [printing, setPrinting] = useState(false)
   const [sidebarWidth, setSidebarWidth] = useState(() => {
     const raw = localStorage.getItem('octave-sidebar-width')
@@ -132,12 +179,6 @@ export default function App() {
     const scroller = notebookRef.current
     const currentDocument = documentRef.current
     if (!scroller || !currentDocument) return
-
-    const activeCell = (globalThis.document.activeElement as HTMLElement | null)?.closest<HTMLElement>('.cell')
-    if (activeCell?.dataset.cellId && scroller.contains(activeCell)) {
-      setBreadcrumbPath(breadcrumbForCell(notebookHeadings, currentDocument.cells, activeCell.dataset.cellId))
-      return
-    }
 
     const scrollerRect = scroller.getBoundingClientRect()
     const anchorY = scrollerRect.top + Math.min(56, scrollerRect.height * 0.16)
@@ -438,7 +479,7 @@ export default function App() {
   }, [activePath, Boolean(document)])
 
   useEffect(() => {
-    return startRuntimeHeartbeat()
+    return startRuntimeHeartbeat(10_000, setBackendConnection)
   }, [])
 
   useEffect(() => () => {
@@ -930,6 +971,10 @@ export default function App() {
   const breadcrumb = document && breadcrumbState.documentId === document.id && breadcrumbState.path.length
     ? breadcrumbState.path
     : document ? [document.title] : []
+  const documentIndicator = dirty ? 'pending' : backendConnection
+  const documentIndicatorLabel = dirty
+    ? `${saving ? 'Guardando cambios' : 'Cambios pendientes'}${backendConnection === 'offline' ? ' · Backend sin conexión' : ''}`
+    : backendConnection === 'online' ? 'Backend conectado' : 'Backend sin conexión'
 
   return (
     <main className="app-shell">
@@ -972,18 +1017,12 @@ export default function App() {
           <>
             <header className="workspace-header">
               <div className="document-title">
-                <nav className="document-breadcrumb" aria-label="Ubicación en el documento" title={breadcrumb.join(' / ')}>
-                  <ol>
-                    {breadcrumb.map((part, index) => (
-                      <li key={`${index}-${part}`} aria-current={index === breadcrumb.length - 1 ? 'location' : undefined}>{part}</li>
-                    ))}
-                  </ol>
-                </nav>
+                <AnimatedBreadcrumb path={breadcrumb} />
                 <i
-                  className={dirty ? 'dirty' : ''}
+                  className={documentIndicator}
                   role="status"
-                  aria-label={saving ? 'Guardando' : dirty ? 'Cambios pendientes' : 'Guardado'}
-                  title={saving ? 'Guardando' : dirty ? 'Cambios pendientes' : 'Guardado'}
+                  aria-label={documentIndicatorLabel}
+                  title={documentIndicatorLabel}
                 />
               </div>
               <div className="toolbar">
@@ -1011,7 +1050,6 @@ export default function App() {
                 if (cell?.dataset.cellId) {
                   activeCellIdRef.current = cell.dataset.cellId
                   persistNotebookView(event.currentTarget)
-                  setBreadcrumbPath(breadcrumbForCell(notebookHeadings, document.cells, cell.dataset.cellId))
                 }
               }}
               onBlurCapture={(event) => {

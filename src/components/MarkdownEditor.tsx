@@ -19,6 +19,7 @@ import {
   mathInputPlugin,
   mathNodeViews,
   normalizeClipboardMath,
+  splitMarkdownDocument,
 } from '../editor/markdownMath'
 import { reconcileEditorValue, recordLocalEditorValue } from '../editor/editorValueSync'
 
@@ -270,20 +271,22 @@ export function MarkdownEditor({ value, onChange, onSplitSelection, viewStateKey
     }
 
     const { from, to } = selectedRange
-    // Cutting the document preserves the open ancestors around a partial
-    // selection (paragraphs, list items, headings and inline marks). Serializing
-    // selection.content() directly can flatten those open nodes.
-    const selectedDocument = editor.state.doc.cut(from, to)
-    const extracted = markdownSerializer.serialize(selectedDocument).trim()
-    if (!extracted) {
+    // Cutting preserves open ancestors around partial paragraphs, lists,
+    // headings, marks and math. The normalizer also removes empty boundary
+    // paragraphs left behind by a full-block text selection.
+    const split = splitMarkdownDocument(editor.state.doc, from, to)
+    if (!split) {
       hideSelectionToolbar()
       return
     }
 
     const transaction = editor.state.tr
-      .delete(from, to)
+      .replaceWith(0, editor.state.doc.content.size, split.document.content)
       .setMeta('addToHistory', false)
-      .setMeta('splitMarkdownSelection', extracted)
+      .setMeta('splitMarkdownSelection', split.extracted)
+    transaction.setSelection(ProseMirrorSelection.near(
+      transaction.doc.resolve(Math.min(from, transaction.doc.content.size)),
+    ))
     editor.dispatch(transaction)
     hideSelectionToolbar()
   }

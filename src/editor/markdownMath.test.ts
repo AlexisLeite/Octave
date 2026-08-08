@@ -5,9 +5,28 @@ import {
   parseMarkdown,
   renderLatexHtml,
   serializeMarkdown,
+  splitMarkdownDocument,
 } from './markdownMath'
 
 describe('Markdown math', () => {
+  it('does not leave a blank line after splitting the final paragraph', () => {
+    const doc = parseMarkdown('Texto original\n\nTexto seleccionado')
+    const finalParagraphStart = doc.child(0).nodeSize
+    const split = splitMarkdownDocument(doc, finalParagraphStart + 1, doc.content.size - 1)
+
+    expect(split?.extracted).toBe('Texto seleccionado')
+    expect(split?.remaining).toBe('Texto original')
+    expect(serializeMarkdown(split!.document)).toBe('Texto original')
+  })
+
+  it('does not leave a leading blank line after splitting the first paragraph', () => {
+    const doc = parseMarkdown('Texto seleccionado\n\nTexto restante')
+    const split = splitMarkdownDocument(doc, 1, doc.child(0).content.size + 1)
+
+    expect(split?.extracted).toBe('Texto seleccionado')
+    expect(split?.remaining).toBe('Texto restante')
+  })
+
   it('parses and preserves inline LaTeX source', () => {
     const source = 'La recurrencia $T_n = T_{n-1} + n$ termina.'
     const doc = parseMarkdown(source)

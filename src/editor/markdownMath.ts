@@ -7,7 +7,7 @@ import {
   schema as baseSchema,
 } from 'prosemirror-markdown'
 import { Schema, type Node as ProseMirrorNode, type NodeSpec } from 'prosemirror-model'
-import { Plugin } from 'prosemirror-state'
+import { EditorState, Plugin } from 'prosemirror-state'
 import type { EditorView, NodeView } from 'prosemirror-view'
 
 const mathInlineSpec: NodeSpec = {
@@ -174,6 +174,23 @@ export function parseMarkdown(source: string) {
 
 export function serializeMarkdown(doc: ProseMirrorNode) {
   return markdownSerializer.serialize(doc)
+}
+
+export function splitMarkdownDocument(doc: ProseMirrorNode, from: number, to: number) {
+  const extracted = markdownSerializer.serialize(doc.cut(from, to)).trim()
+  if (!extracted) return null
+
+  // Deleting all text from a block leaves an empty ProseMirror paragraph.
+  // Serializing that paragraph produces an otherwise invisible blank line in
+  // the original cell. Round-trip the remainder through Markdown so empty
+  // boundary blocks disappear while real internal paragraph breaks remain.
+  const deleted = EditorState.create({ doc }).tr.delete(from, to).doc
+  const remaining = markdownSerializer.serialize(deleted).trim()
+  return {
+    extracted,
+    remaining,
+    document: markdownParser.parse(remaining),
+  }
 }
 
 export function renderLatexHtml(latex: string, displayMode: boolean) {
