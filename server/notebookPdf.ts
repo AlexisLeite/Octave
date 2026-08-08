@@ -268,6 +268,188 @@ function writeDisplayMath(pdf: PDFKit.PDFDocument, source: string) {
   pdf.y = top + graphic.height + verticalPadding
 }
 
+function tokenizeOctaveLine(line: string, blockComment: { marker: '%' | '#' | null }): PdfCodeToken[] {
+  const result: PdfCodeToken[] = []
+  let index = 0
+  let expectOperand = true
+  const push = (text: string, kind: PdfCodeTokenKind) => {
+    if (!text) return
+    const previous = result.at(-1)
+    if (previous?.kind === kind) previous.text += text
+    else result.push({ text, kind })
+  }
+
+  while (index < line.length) {
+    if (blockComment.marker) {
+      const closer = `${blockComment.marker}}`
+      const end = line.indexOf(closer, index)
+      if (end < 0) {
+        push(line.slice(index), 'comment')
+        break
+      }
+      push(line.slice(index, end + closer.length), 'comment')
+      index = end + closer.length
+      blockComment.marker = null
+      continue
+    }
+
+    const character = line[index]
+    if (/\s/.test(character)) {
+      const start = index++
+      while (index < line.length && /\s/.test(line[index])) index += 1
+      push(line.slice(start, index), 'plain')
+      continue
+    }
+
+    if ((character === '%' || character === '#') && line[index + 1] === '{') {
+      blockComment.marker = character
+      push(line.slice(index), 'comment')
+      break
+    }
+    if (character === '%' || character === '#') {
+      push(line.slice(index), 'comment')
+      break
+    }
+
+    if (character === '"' || (character === "'" && expectOperand)) {
+      const quote = character
+      const start = index++
+      while (index < line.length) {
+        if (line[index] === '\\' && quote === '"' && index + 1 < line.length) {
+          index += 2
+          continue
+        }
+        if (line[index] === quote) {
+          if (line[index + 1] === quote) {
+            index += 2
+            continue
+          }
+          index += 1
+          break
+        }
+        index += 1
+      }
+      push(line.slice(start, index), 'string')
+      expectOperand = false
+      continue
+    }
+
+    if (character === "'") {
+      push(character, 'operator')
+      index += 1
+      expectOperand = false
+      continue
+    }
+
+    const rest = line.slice(index)
+    const number = rest.match(/^(?:0[xX][0-9a-fA-F]+|0[bB][01]+|(?:\d+(?:\.\d*)?|\.\d+)(?:[eEdD][+-]?\d+)?)[ij]?/)
+    if (number) {
+      push(number[0], 'number')
+      index += number[0].length
+      expectOperand = false
+      continue
+    }
+
+    const identifier = rest.match(/^[A-Za-z_]\w*/)
+    if (identifier) {
+      const value = identifier[0]
+      const kind = OCTAVE_KEYWORDS.has(value)
+        ? 'keyword'
+        : OCTAVE_CONSTANTS.has(value)
+          ? 'constant'
+          : OCTAVE_BUILTINS.has(value)
+            ? 'builtin'
+            : 'plain'
+      push(value, kind)
+      index += value.length
+      expectOperand = OCTAVE_KEYWORDS.has(value)
+      continue
+    }
+
+    const operator = rest.match(/^(?:\.\*|\.\/|\.\\|\.\^|\+\+|--|==|~=|!=|<=|>=|&&|\|\||\+=|-=|\*=|\/=|\\=|\^=|\*|\/|\\|\^|\+|-|=|<|>|&|\||~|!|:)/)
+    if (operator) {
+      push(operator[0], 'operator')
+      index += operator[0].length
+      expectOperand = true
+      continue
+    }
+
+    push(character, 'plain')
+    index += 1
+    expectOperand = !/[\]\)}]/.test(character)
+  }
+
+  return result
+}
+
+/** Tokenización ligera usada por el PDF; se exporta para probar el contrato visual. */
+export function tokenizeOctaveForPdf(value: string): PdfCodeToken[][] {
+  const blockComment: { marker: '%' | '#' | null } = { marker: null }
+  return printable(value).split('\n').map((line) => tokenizeOctaveLine(line, blockComment))
+}
+
+function wrapCodeTokens(tokens: PdfCodeToken[], maxCharacters: number): PdfCodeToken[][] {
+  if (!tokens.length) return [[]]
+  const rows: PdfCodeToken[][] = []
+  let row: PdfCodeToken[] = []
+  let remaining = maxCharacters
+
+  for (const token of tokens) {
+    let value = token.text
+    while (value.length) {
+      const count = Math.min(remaining, value.length)
+      const part = value.slice(0, count)
+      const previous = row.at(-1)
+      if (previous?.kind === token.kind) previous.text += part
+      else row.push({ text: part, kind: token.kind })
+      value = value.slice(count)
+      remaining -= count
+      if (remaining === 0) {
+        rows.push(row)
+        row = []
+        remaining = maxCharacters
+      }
+    }
+  }
+  if (row.length) rows.push(row)
+  return rows
+}
+
+function writeHighlightedPreformatted(pdf: PDFKit.PDFDocument, value: string) {
+  const content = trimOuterBlankLines(value) || ' '
+  const innerWidth = CONTENT_WIDTH - 20
+  const fontSize = 8.75
+  const lineGap = 3
+  const lineHeight = fontSize * 1.15 + lineGap
+  const characterWidth = pdf.font('Courier').fontSize(fontSize).widthOfString('M')
+  const maxCharacters = Math.max(1, Math.floor(innerWidth / characterWidth))
+  const visualLines = tokenizeOctaveForPdf(content).flatMap((line) => wrapCodeTokens(line, maxCharacters))
+  let offset = 0
+
+  while (offset < visualLines.length) {
+    ensureSpace(pdf, 28)
+    const top = pdf.y
+    const available = pdf.page.height - PAGE_MARGIN - top
+    const count = Math.max(1, Math.min(visualLines.length - offset, Math.floor((available - 12) / lineHeight)))
+    const height = count * lineHeight + 12
+    pdf.save().roundedRect(PAGE_MARGIN, top, CONTENT_WIDTH, height, 4).fill('#f3f5f7').restore()
+
+    for (let rowIndex = 0; rowIndex < count; rowIndex += 1) {
+      let cursorX = PAGE_MARGIN + 10
+      const cursorY = top + 6 + rowIndex * lineHeight
+      for (const token of visualLines[offset + rowIndex]) {
+        const style = CODE_STYLE[token.kind]
+        pdf.fillColor(style.color).font(style.font).fontSize(fontSize).text(token.text, cursorX, cursorY, { lineBreak: false })
+        cursorX += pdf.font(style.font).fontSize(fontSize).widthOfString(token.text)
+      }
+    }
+
+    pdf.y = top + height
+    offset += count
+    if (offset < visualLines.length) pdf.addPage()
+  }
+}
+
 function writePreformatted(pdf: PDFKit.PDFDocument, value: string, color = '#17202a') {
   const content = trimOuterBlankLines(value) || ' '
   const lines = content.split('\n')
@@ -322,7 +504,7 @@ function writeMarkdown(pdf: PDFKit.PDFDocument, source: string) {
       index += 1
       while (index < lines.length && !/^\s*```/.test(lines[index])) code.push(lines[index++])
       if (index < lines.length) index += 1
-      writePreformatted(pdf, code.join('\n'))
+      writeHighlightedPreformatted(pdf, code.join('\n'))
       addGap(pdf, 7)
       continue
     }
@@ -450,7 +632,7 @@ export async function renderNotebookPdf(document: NotebookDocument): Promise<Buf
     document.cells.forEach((cell, index) => {
       if (cell.kind === 'markdown') writeMarkdown(pdf, cell.source)
       else {
-        writePreformatted(pdf, cell.source)
+        writeHighlightedPreformatted(pdf, cell.source)
         const output = document.outputs?.[cell.id]
         if (output) {
           for (const part of outputText(output)) {

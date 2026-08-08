@@ -1,8 +1,21 @@
 import { describe, expect, it } from 'vitest'
 import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs'
-import { renderNotebookPdf } from '../server/notebookPdf.ts'
+import { renderNotebookPdf, tokenizeOctaveForPdf } from '../server/notebookPdf.ts'
 
 describe('renderNotebookPdf', () => {
+  it('clasifica los tokens de Octave usados para el syntax highlight', () => {
+    const tokens = tokenizeOctaveForPdf(`function y = area(r)\n  y = pi * r^2; % círculo\n  disp("listo");`).flat()
+    const kindOf = (text: string) => tokens.find((token) => token.text === text)?.kind
+
+    expect(kindOf('function')).toBe('keyword')
+    expect(kindOf('pi')).toBe('constant')
+    expect(kindOf('2')).toBe('number')
+    expect(kindOf('disp')).toBe('builtin')
+    expect(kindOf('"listo"')).toBe('string')
+    expect(tokens.some((token) => token.kind === 'comment' && token.text.includes('círculo'))).toBe(true)
+    expect(tokens.some((token) => token.kind === 'operator' && token.text.includes('^'))).toBe(true)
+  })
+
   it('genera un trabajo entregable con contenido y fórmulas renderizadas', async () => {
     const buffer = await renderNotebookPdf({
       version: 1,
