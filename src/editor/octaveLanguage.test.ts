@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest';
 
-import { collectOctaveSymbols, octaveCommentPrefixAt } from './octaveLanguage';
+import {
+  collectOctaveSymbols,
+  octaveCommentPrefixAt,
+  octaveLanguageConfiguration,
+} from './octaveLanguage';
+
+describe('Octave quote pairs', () => {
+  it('does not auto-close transpose quotes and preserves double-quote pairing', () => {
+    expect(octaveLanguageConfiguration.autoClosingPairs).not.toContainEqual(
+      expect.objectContaining({ open: "'", close: "'" }),
+    );
+    expect(octaveLanguageConfiguration.surroundingPairs).not.toContainEqual({ open: "'", close: "'" });
+    expect(octaveLanguageConfiguration.autoClosingPairs).toContainEqual(
+      expect.objectContaining({ open: '"', close: '"' }),
+    );
+    expect(octaveLanguageConfiguration.surroundingPairs).toContainEqual({ open: '"', close: '"' });
+  });
+});
 
 describe('Octave comment continuation', () => {
   it.each([

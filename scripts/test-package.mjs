@@ -82,7 +82,7 @@ try {
   const runtimeResponse = await fetch(`${baseUrl}/api/runtime/open`, {
     method: 'POST',
     headers: { 'content-type': 'application/json; charset=utf-8' },
-    body: JSON.stringify({ documentId: 'package-smoke-test' }),
+    body: JSON.stringify({ documentId: 'package-smoke-test', clientId: 'package-smoke-client' }),
   })
   const runtimeBody = await runtimeResponse.json()
   if (runtimeResponse.ok) {

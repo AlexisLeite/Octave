@@ -4,6 +4,24 @@
 runtime. Calls within a runtime are serialized; distinct runtimes may execute in
 parallel. Variables therefore survive between `execute` calls until `close`.
 
+`open(documentId, clientId)` assigns the runtime to one of two server-enforced
+slots for that browser tab: one notebook slot and one ephemeral help slot
+(`documentId` beginning with `help-`). Opening a notebook atomically closes and
+replaces that client's previous notebook. A second help open is rejected while
+the help slot is busy, and help runtimes close automatically after their first
+execution or inspection. Different client IDs have independent slots.
+
+Every runtime has an unref'ed inactivity timer, refreshed by creation, execution,
+and inspection. The default idle limit is 10 minutes; expiry removes the runtime
+from its map and slot, closes Octave, and deletes its temporary directory. This
+also bounds leaked runtimes after reloads, HMR, or lost close requests.
+
+The browser also sends `heartbeat(clientId)` every 10 seconds. Missing heartbeats
+for 30 seconds atomically close both slots owned by that client. Heartbeats do not
+refresh runtime inactivity, so an attached but unused Octave process still reaches
+the 10-minute idle limit. Both timers are unref'ed and generation-checked to make
+heartbeat/expiry races harmless.
+
 Every runtime starts with an implicit `heading(txt, txt2)` helper. It separates itself
 from preceding output and prints `txt`; when the optional `txt2` is present, it prints
 it immediately afterward. Blank lines around the outer edge of a cell result are

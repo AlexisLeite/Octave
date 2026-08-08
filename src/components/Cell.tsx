@@ -1,4 +1,4 @@
-import { Braces, Copy, GripVertical, Play, Plus, Text, Trash2, WandSparkles } from 'lucide-react'
+import { Braces, Copy, GripVertical, Play, Plus, RotateCcw, Text, Trash2, WandSparkles } from 'lucide-react'
 import { useMemo } from 'react'
 import type { ExecutionResult, NotebookCell } from '../types'
 import { LoadingDot } from './LoadingDot'
@@ -15,6 +15,7 @@ interface CellProps {
   onRun: () => void
   onFormat: () => void
   onDelete: () => void
+  onClearOutput: () => void
   onCopyContext: () => void
   onKindChange: (kind: NotebookCell['kind']) => void
   onInspect: (expression: string) => Promise<{ display: string; type?: string; shape?: string }>
@@ -32,7 +33,7 @@ interface CellProps {
   onSplitMarkdownSelection: (remaining: string, extracted: string) => void
 }
 
-export function Cell({ cell, index, order, output, running, onChange, onRun, onFormat, onDelete, onCopyContext, onKindChange, onInspect, completionSources, viewStateKey, dragging, dropEdge, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave, showInsertAfter, onAddAfter, onSplitMarkdownSelection }: CellProps) {
+export function Cell({ cell, index, order, output, running, onChange, onRun, onFormat, onDelete, onClearOutput, onCopyContext, onKindChange, onInspect, completionSources, viewStateKey, dragging, dropEdge, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave, showInsertAfter, onAddAfter, onSplitMarkdownSelection }: CellProps) {
   const resultMatchesSource = output?.source === cell.source
   const diagnostics = useMemo(() => resultMatchesSource && output?.error?.line ? [{
       line: output.error.line,
@@ -82,6 +83,7 @@ export function Cell({ cell, index, order, output, running, onChange, onRun, onF
           {cell.kind === 'code' && <button aria-label="Ejecutar" title="Ejecutar · Ctrl+Enter" onClick={onRun}><Play size={14} /></button>}
           {cell.kind === 'code' && <button aria-label="Formatear código" title="Formatear · Ctrl+Shift+F" onClick={onFormat}><WandSparkles size={14} /></button>}
           {cell.kind === 'code' && <button aria-label="Copiar contexto" title="Copiar contexto" onClick={onCopyContext}><Copy size={14} /></button>}
+          {cell.kind === 'code' && <button aria-label="Borrar salida" title="Borrar salida" onClick={onClearOutput} disabled={!output}><RotateCcw size={14} /></button>}
           <button
             aria-label={cell.kind === 'code' ? 'Convertir a markdown' : 'Convertir a código'}
             title={cell.kind === 'code' ? 'Markdown' : 'Código'}

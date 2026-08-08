@@ -1,6 +1,7 @@
 import { code, markdown, topic, type HelpNode } from '../helpTypes'
+import { withPedagogicalClosures } from './pedagogicalClosures'
 
-export const numericalHelp: HelpNode[] = [
+export const numericalHelp: HelpNode[] = withPedagogicalClosures([
   topic('numeric-linear', 'Álgebra lineal numérica', [
     markdown(String.raw`Octave usa matrices como modelo central. Antes de calcular, revisa dimensiones, escala y estructura. Evalúa una solución por su residuo $\lVert Ax-b\rVert$, no solo por los dígitos impresos.`),
     code(`A = [4, -1; 2, 5];
@@ -157,6 +158,47 @@ plot(x,sin(x),'linewidth',2);
 xlabel('tiempo (s)'); ylabel('amplitud');
 title('Oscilación'); grid on;`, 'Curva con contexto'),
   ], [
+    topic('numeric-graphics-choice', 'Elegir gráfico y controlar el estado', [
+      markdown(String.raw`El tipo de gráfico debe corresponder a la pregunta. Usa plot para una variable ordenada o continua; scatter para relación entre pares sin unirlos; bar para comparar categorías; hist para una distribución; errorbar cuando cada estimación tiene incertidumbre. Una imagen bonita con una geometría incorrecta comunica una relación falsa.
+
+Etiqueta ejes con unidades, explica símbolos en legend y conserva escalas comparables. No uses color como única codificación y evita el doble eje vertical salvo que la relación sea imprescindible y esté claramente marcada.`),
+      code(`clear;
+x = 1:5;
+media = [2.1, 2.8, 3.0, 4.2, 4.8];
+incertidumbre = [0.2, 0.3, 0.15, 0.4, 0.25];
+figure(20); clf;
+h = errorbar(x, media, incertidumbre, 'o-');
+set(h, 'linewidth', 1.5);
+xlabel('tiempo (s)'); ylabel('velocidad (m/s)');
+title('Estimación e incertidumbre'); grid on;
+assert(numel(media) == numel(incertidumbre));`, 'Serie ordenada con incertidumbre'),
+      markdown(String.raw`figure selecciona una ventana; axes o subplot selecciona un sistema de ejes. Muchas funciones de alto nivel reemplazan el contenido actual. hold on conserva lo existente y hold off restaura el reemplazo; clf limpia la figura completa. Guardar handles evita depender de gcf/gca y permite modificar el objeto correcto.
+
+**Criterio:** crea o limpia explícitamente al comienzo de cada bloque y usa hold solo durante una superposición deliberada. Error frecuente: ejecutar varias veces con hold on y duplicar curvas; otro es unir con líneas categorías cuyo orden no tiene continuidad. **Ejercicio:** muestra los mismos datos como scatter y bar en dos subplots y explica qué pregunta responde cada uno.`),
+      code(`clear;
+x = linspace(0, 2*pi, 150);
+figure(21); clf;
+ax = axes();
+h1 = plot(ax, x, sin(x), 'linewidth', 1.5);
+hold(ax, 'on');
+h2 = plot(ax, x, cos(x), '--', 'linewidth', 1.5);
+hold(ax, 'off');
+legend(ax, {'seno', 'coseno'});
+xlabel(ax, 'ángulo (rad)'); ylabel(ax, 'amplitud'); grid(ax, 'on');
+assert(ishandle(h1) && ishandle(h2));`, 'Superponer sin depender del eje actual'),
+      markdown(String.raw`Las escalas semilogx, semilogy y loglog son útiles cuando órdenes de magnitud importan, pero excluyen valores no positivos. Antes de usarlas valida el dominio y declara la escala. Para datos densos considera transparencia, contornos o agregación en vez de ocultar puntos por superposición.
+
+**Ejercicio:** genera 1000 normales, presenta un histograma y comprueba por separado media y desviación; el gráfico orienta, las estadísticas verifican.`),
+      code(`clear;
+randn('state', 12);
+muestra = 2 + 0.5 * randn(1, 1000);
+figure(22); clf;
+hist(muestra, 20);
+xlabel('valor'); ylabel('frecuencia'); title('Distribución simulada');
+assert(abs(mean(muestra) - 2) < 0.08);
+assert(abs(std(muestra) - 0.5) < 0.08);`, 'Histograma más comprobación numérica'),
+    ], [], ['plot', 'scatter', 'bar', 'hist', 'errorbar', 'figure', 'axes', 'hold', 'clf', 'elegir gráfico']),
+
     topic('numeric-graphics-2d', 'Gráficos 2D y handles', [
       markdown(String.raw`plot acepta varias series. Conserva handles para editar propiedades sin depender del objeto actual. Usa loglog para leyes de potencia y nunca ocultes ceros o negativos sin explicarlo.`),
       code(`x = linspace(0,4*pi,300);
@@ -266,7 +308,73 @@ nombres`, 'Inventario de paquetes'),
       code(`partes = strsplit(path(),pathsep());
 partes(1:min(5,numel(partes)))
 which('mean','-all')`, 'Inspeccionar resolución'),
+      markdown(String.raw`El ciclo completo es: **inventariar → instalar → cargar → usar → descargar o desinstalar**. Las órdenes principales son pkg list, pkg describe nombre, pkg install archivo.tar.gz, pkg install -forge nombre, pkg load nombre, pkg unload nombre, pkg update y pkg uninstall nombre. Instalar y actualizar modifican el entorno: revisa fuente, versión, dependencias y permisos antes de hacerlo.
+
+Un paquete instalado no necesariamente está cargado. pkg load agrega sus funciones al path de la sesión; pkg unload las retira. En un proyecto, registra versiones y carga dependencias en el punto de entrada, no de forma escondida dentro de funciones de cálculo.`),
+      code(`clear;
+inventario = pkg('list');
+assert(iscell(inventario));
+for k = 1:numel(inventario)
+  p = inventario{k};
+  fprintf('%s %s, cargado=%d\\n', p.name, p.version, p.loaded);
+  assert(isfield(p, 'depends') && isfield(p, 'dir'));
+endfor`, 'Versiones y estado de carga'),
+      markdown(String.raw`El load path decide qué función gana cuando existen nombres repetidos. addpath agrega rutas y rmpath las retira; genpath puede incluir carpetas privadas, datos o versiones duplicadas, por eso no debe aplicarse indiscriminadamente. which -all ayuda a diagnosticar colisiones.
+
+Errores frecuentes: instalar durante una ejecución normal, depender de un paquete cargado en una sesión anterior y usar savepath para cambiar globalmente el entorno de otra persona. **Criterio:** dependencia declarada y versión registrada; instalación como paso separado; carga explícita al iniciar. **Ejercicio:** escribe una función que reciba nombre y versión mínima, busque el paquete en pkg list y produzca un error útil si falta.`),
+      code(`clear;
+function encontrado = buscar_paquete(nombre)
+  lista = pkg('list');
+  encontrado = [];
+  for k = 1:numel(lista)
+    if strcmp(lista{k}.name, nombre)
+      encontrado = lista{k};
+      return;
+    endif
+  endfor
+endfunction
+
+resultado = buscar_paquete('__paquete_inexistente__');
+assert(isempty(resultado));`, 'Comprobar una dependencia sin modificar el entorno'),
     ], [], ['pkg', 'forge', 'path', 'which', 'dependencias']),
+    topic('numeric-matlab-compatibility', 'Compatibilidad entre GNU Octave y MATLAB', [
+      markdown(String.raw`Octave y MATLAB comparten matrices, indexación y gran parte de la biblioteca, pero no son el mismo lenguaje. Para un núcleo portable usa end en lugar de endif/endfor/endfunction, ~= en lugar de !=, ~ en lugar de !, x=x+1 en lugar de += o ++, y ^/.^ en lugar de **/.**. Esas alternativas funcionan en ambos.
+
+Las comillas dobles son una diferencia importante: en Octave actual producen char, mientras que en MATLAB moderno producen string. Para texto portable usa comillas simples y strcmp, o aísla una capa de conversión. También pueden variar gráficos, paquetes, argumentos nuevos y comportamiento de versiones antiguas.`),
+      code(`clear;
+function y = formula_portable(x)
+  if ~isnumeric(x)
+    error('La entrada debe ser numérica');
+  end
+  y = x.^2 + 2.*x + 1;
+end
+
+resultado = formula_portable(0:3);
+assert(isequal(resultado, [1, 4, 9, 16]));`, 'Un subconjunto sintáctico común'),
+      markdown(String.raw`Detecta el entorno con exist('OCTAVE_VERSION','builtin'), pero prefiere detectar la **capacidad** concreta con exist('funcion','file') o nargin antes de ramificar por marca. Encapsula la diferencia en una función pequeña y prueba las dos rutas.
+
+La compatibilidad numérica no exige bits idénticos: diferentes BLAS, solvers u órdenes de reducción pueden cambiar los últimos dígitos. Compara invariantes, residuos y tolerancias. **Ejercicio:** crea una función portable que use vecnorm si existe y, si no, calcule sqrt(sum(abs(X).^2,dim)).`),
+      code(`clear;
+es_octave = exist('OCTAVE_VERSION', 'builtin') != 0;
+hay_json = exist('jsonencode', 'builtin') || exist('jsonencode', 'file');
+if es_octave
+  entorno = ['GNU Octave ', OCTAVE_VERSION];
+else
+  entorno = 'MATLAB';
+end
+assert(ischar(entorno) && !isempty(entorno));
+assert(islogical(logical(hay_json)));
+disp(entorno);`, 'Entorno y capacidad por separado'),
+      markdown(String.raw`Errores frecuentes: llenar todo el programa de if OCTAVE_VERSION, usar sintaxis exclusiva sin documentarla, o afirmar portabilidad sin ejecutar pruebas en ambos entornos. **Criterio:** núcleo común primero; adaptador pequeño cuando una diferencia aporta valor; prueba automatizada en cada entorno admitido.`),
+      code(`clear;
+A = [3, 1; 1, 2]; b = [9; 8];
+x = A \\ b;
+residuo_relativo = norm(A*x - b) / norm(b);
+assert(residuo_relativo < 1e-12);
+
+esperado = [2; 3];
+assert(norm(x - esperado, Inf) < 1e-12);`, 'Probar propiedades numéricas portables'),
+    ], [], ['MATLAB', 'compatibilidad', 'portabilidad', 'OCTAVE_VERSION', 'feature detection', 'sintaxis común']),
     topic('numeric-interoperability', 'MATLAB, Python y datos', [
       markdown(String.raw`Octave comparte gran parte del lenguaje MATLAB, pero difiere en paquetes y gráficos. Para portabilidad, usa end, aísla extensiones exclusivas y prueba en ambos entornos.`),
       code(`if exist('OCTAVE_VERSION','builtin')
@@ -299,4 +407,4 @@ assert(error < 1e-4,'grilla insuficiente');
 [I,error]`, 'Resultado verificable'),
     ], [], ['proyecto', 'reproducibilidad', 'pipeline', 'assert']),
   ], ['paquetes', 'Forge', 'MATLAB', 'Python', 'proyectos']),
-]
+])

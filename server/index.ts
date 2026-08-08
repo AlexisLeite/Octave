@@ -244,7 +244,12 @@ app.post('/api/files/rename', async (req, res, next) => {
 })
 
 app.post('/api/runtime/open', async (req, res, next) => {
-  try { res.status(201).json(await runtimes.open(String(req.body.documentId || ''))) } catch (error) { next(error) }
+  try {
+    res.status(201).json(await runtimes.open(
+      String(req.body.documentId || ''),
+      String(req.body.clientId || ''),
+    ))
+  } catch (error) { next(error) }
 })
 app.post('/api/runtime/execute', async (req, res, next) => {
   try { res.json(await runtimes.execute(String(req.body.runtimeId || ''), { cellId: String(req.body.cellId || ''), code: String(req.body.code || '') })) } catch (error) { next(error) }
@@ -254,6 +259,15 @@ app.post('/api/runtime/inspect', async (req, res, next) => {
 })
 app.post('/api/runtime/close', async (req, res, next) => {
   try { await runtimes.close(String(req.body.runtimeId || '')); res.json({ ok: true }) } catch (error) { next(error) }
+})
+app.post('/api/runtime/heartbeat', (req, res, next) => {
+  try {
+    runtimes.heartbeat(String(req.body.clientId || ''))
+    res.json({ ok: true })
+  } catch (error) { next(error) }
+})
+app.get('/api/runtime/status', (_req, res) => {
+  res.json({ idleTimeoutMs: 10 * 60_000, clientTimeoutMs: 30_000, runtimes: runtimes.status() })
 })
 
 const distDir = path.resolve(process.env.OCTAVE_NOTEBOOK_WEB_DIR || path.join(rootDir, 'dist'))
@@ -275,9 +289,12 @@ const server = app.listen(port, host, () => {
   console.log(`Octave API http://${host}:${listeningPort}`)
 })
 
+let shuttingDown = false
 async function shutdown() {
-  await runtimes.closeAll()
+  if (shuttingDown) return
+  shuttingDown = true
   server.close()
+  await runtimes.closeAll()
 }
-process.once('SIGINT', shutdown)
-process.once('SIGTERM', shutdown)
+process.once('SIGINT', () => { void shutdown() })
+process.once('SIGTERM', () => { void shutdown() })

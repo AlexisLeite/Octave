@@ -26,6 +26,37 @@ function firstToken(line: string): string {
   return match?.[1].toLowerCase() ?? ''
 }
 
+function structuralTokens(line: string, incomingDepth = 0): string[] {
+  const result: string[] = []
+  let depth = incomingDepth
+  let expectsWord = depth === 0
+
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index]
+    if (character === '(' || character === '[' || character === '{') {
+      depth += 1
+      expectsWord = false
+      continue
+    }
+    if (character === ')' || character === ']' || character === '}') {
+      depth = Math.max(0, depth - 1)
+      continue
+    }
+    if (depth === 0 && (character === ',' || character === ';')) {
+      expectsWord = true
+      continue
+    }
+    if (!expectsWord || depth !== 0 || /\s/.test(character)) continue
+    const match = /^[A-Za-z_]\w*/.exec(line.slice(index))
+    if (match) {
+      result.push(match[0].toLowerCase())
+      index += match[0].length - 1
+    }
+    expectsWord = false
+  }
+  return result
+}
+
 function leadingWidth(line: string): number {
   return /^\s*/.exec(line)?.[0].replace(/\t/g, '  ').length ?? 0
 }
@@ -196,6 +227,62 @@ function normalizeCallSpacing(line: string): string {
   return result
 }
 
+const SPACED_OPERATOR = /[ \t]*(\.\*\*=|\.\*=|\.\/=|\.\\=|\.\^=|\*\*=|\+=|-=|\*=|\/=|\\=|\^=|&=|\|=|==|!=|~=|<=|>=|&&|\|\||\.\*|\.\/|\.\\|\.\^|\*\*|=|<|>|\*|\/|\\|\^|&|\|)[ \t]*/g
+
+function normalizeOperators(line: string): string {
+  let result = ''
+  let code = ''
+  let expectOperand = true
+  const flush = () => {
+    result += code
+      .replace(/(@\([^()]*\))[ \t]*(?=\S)/g, '$1 ')
+      .replace(SPACED_OPERATOR, ' $1 ')
+    code = ''
+  }
+
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index]
+    if (character === '%' || character === '#') {
+      flush()
+      result += line.slice(index)
+      return result.trimEnd()
+    }
+    if (character === '"' || (character === "'" && expectOperand)) {
+      flush()
+      const end = consumeQuoted(line, index, character as "'" | '"')
+      result += line.slice(index, end + 1)
+      index = end
+      expectOperand = false
+      continue
+    }
+    if (character === "'") {
+      code += character
+      expectOperand = false
+      continue
+    }
+    if (/[A-Za-z_]/.test(character)) {
+      const match = /^[A-Za-z_]\w*/.exec(line.slice(index))?.[0] ?? character
+      code += match
+      index += match.length - 1
+      expectOperand = false
+      continue
+    }
+    if (/\d/.test(character)) {
+      const match = /^(?:\d+(?:\.\d*)?|\.\d+)(?:[eEdD][+-]?\d+)?/.exec(line.slice(index))?.[0] ?? character
+      code += match
+      index += match.length - 1
+      expectOperand = false
+      continue
+    }
+
+    code += character
+    if (character === ')' || character === ']' || character === '}') expectOperand = false
+    else if (!/\s/.test(character)) expectOperand = true
+  }
+  flush()
+  return result.trimEnd()
+}
+
 /**
  * Conservative Octave formatter. It only changes block indentation, call
  * spacing, blank lines and trailing whitespace. Strings, comments and
@@ -219,7 +306,10 @@ export function formatOctaveCode(source: string, indent = '  '): string {
     }
 
     const trimmed = line.trimStart()
-    const token = analysis.matrixDepthBefore > 0 ? '' : firstToken(analysis.code)
+    const lineTokens = analysis.matrixDepthBefore > 0
+      ? []
+      : structuralTokens(analysis.code, analysis.matrixDepthBefore)
+    const token = lineTokens[0] ?? ''
     if (CLOSERS.has(token)) {
       if (stack.at(-1) === 'case') stack.pop()
       if (stack.length) stack.pop()
@@ -237,11 +327,26 @@ export function formatOctaveCode(source: string, indent = '  '): string {
       const width = Math.max(0, leadingWidth(line) + (matrixIndentShift ?? 0))
       text = `${' '.repeat(width)}${trimmed}`
     } else {
-      text = `${indent.repeat(depth)}${normalizeCallSpacing(trimmed)}`
+      text = `${indent.repeat(depth)}${normalizeOperators(normalizeCallSpacing(trimmed))}`
     }
 
     if (CASES.has(token)) stack.push('case')
     else if (OPENERS.has(token)) stack.push(token)
+
+    // Octave permits several statements on one physical line. Apply the
+    // remaining structural tokens so `if cond, a=1; else, a=2; endif` has no
+    // effect on the indentation of the following line.
+    for (const inlineToken of lineTokens.slice(1)) {
+      if (CLOSERS.has(inlineToken)) {
+        if (stack.at(-1) === 'case') stack.pop()
+        if (stack.length) stack.pop()
+      } else if (CASES.has(inlineToken)) {
+        if (stack.at(-1) === 'case') stack.pop()
+        stack.push('case')
+      } else if (OPENERS.has(inlineToken)) {
+        stack.push(inlineToken)
+      }
+    }
 
     continuation = /\.\.\.\s*$/.test(analysis.code)
     if (analysis.matrixDepthBefore > 0 && analysis.matrixDepthAfter === 0) matrixIndentShift = null

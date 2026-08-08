@@ -20,6 +20,33 @@ describe('formatOctaveCode', () => {
     )
   })
 
+  it('normalizes assignment, comparison and arithmetic operators', () => {
+    expect(formatOctaveCode("i=0;\nA=B*C;\nlisto=i<=10&&A~=B;\ntexto='a=b'; % x=y\nT=A';")).toBe(
+      "i = 0;\nA = B * C;\nlisto = i <= 10 && A ~= B;\ntexto = 'a=b'; % x=y\nT = A';",
+    )
+  })
+
+  it('separates an anonymous-function signature from its expression', () => {
+    expect(formatOctaveCode('@(x)1 / (1+x);')).toBe('@(x) 1 / (1+x);')
+  })
+
+  it('balances compact control flow before indenting the next line', () => {
+    const source = [
+      'while b-a>tol',
+      'medio=(a+b)/2;',
+      'if f(a)*f(medio)<=0, b=medio; else, a=medio; endif',
+      'iter+=1;',
+      'endwhile',
+    ].join('\n')
+    expect(formatOctaveCode(source)).toBe([
+      'while b-a > tol',
+      '  medio = (a+b) / 2;',
+      '  if f(a) * f(medio) <= 0, b = medio; else, a = medio; endif',
+      '  iter += 1;',
+      'endwhile',
+    ].join('\n'))
+  })
+
   it('keeps relative alignment inside multiline matrices', () => {
     expect(formatOctaveCode('if ok\nA = [1, 2;\n     3, f( a , b )\n    ];\nend')).toBe(
       'if ok\n  A = [1, 2;\n       3, f( a , b )\n      ];\nend',

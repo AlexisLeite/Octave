@@ -21,6 +21,22 @@ export interface RuntimeManagerOptions {
   maxOutputBytes?: number;
   /** Parent for per-runtime temporary directories. Defaults to the OS temp directory. */
   tempRoot?: string;
+  /** Idle lifetime for every runtime. Defaults to 10 minutes. */
+  idleTimeoutMs?: number;
+  /** Time without a client heartbeat before all of its runtimes close. Defaults to 30 seconds. */
+  clientTimeoutMs?: number;
+}
+
+export type RuntimeRole = "notebook" | "help";
+
+export interface RuntimeStatus {
+  runtimeId: string;
+  documentId: string;
+  clientId: string;
+  role: RuntimeRole;
+  pid: number | null;
+  createdAt: string;
+  lastActivityAt: string;
 }
 
 export interface ExecuteInput {
@@ -51,11 +67,13 @@ export interface InspectResult {
 }
 
 export interface RuntimeManager {
-  open(documentId: string): Promise<{ runtimeId: string }>;
+  open(documentId: string, clientId?: string): Promise<{ runtimeId: string }>;
   execute(runtimeId: string, input: ExecuteInput): Promise<ExecuteResult>;
   inspect(runtimeId: string, expression: string): Promise<InspectResult>;
   close(runtimeId: string): Promise<void>;
   closeAll(): Promise<void>;
+  status(): RuntimeStatus[];
+  heartbeat(clientId: string): void;
 }
 
 interface OctaveStackFrame {
@@ -93,6 +111,8 @@ class RuntimeTimeoutError extends RuntimeOperationalError {}
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_OUTPUT_BYTES = 10 * 1024 * 1024;
+const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60_000;
+const DEFAULT_CLIENT_TIMEOUT_MS = 30_000;
 const IMPLICIT_NOTEBOOK_SOURCE = [
   "function heading = heading(txt, txt2)",
   '  disp("")',
@@ -111,6 +131,14 @@ const IMPLICIT_NOTEBOOK_SOURCE = [
 class OctaveRuntime {
   readonly runtimeId = randomUUID();
   readonly documentId: string;
+
+  get pid(): number | null {
+    return this.child.pid ?? null;
+  }
+
+  get alive(): boolean {
+    return !this.exited && !this.closing;
+  }
 
   private readonly executable: string;
   private readonly timeoutMs: number;
@@ -474,15 +502,48 @@ class OctaveRuntime {
   }
 }
 
+interface ManagedRuntime {
+  runtime: OctaveRuntime;
+  clientId: string;
+  role: RuntimeRole;
+  createdAt: number;
+  lastActivityAt: number;
+  idleTimer: NodeJS.Timeout | null;
+}
+
+interface ClientRuntimeSlots {
+  notebook?: string;
+  help?: string;
+}
+
+interface ClientLease {
+  generation: number;
+  lastHeartbeatAt: number;
+  timer: NodeJS.Timeout | null;
+}
+
 class RuntimeManagerImpl implements RuntimeManager {
   private readonly options: Required<
-    Pick<RuntimeManagerOptions, "timeoutMs" | "maxOutputBytes" | "tempRoot">
+    Pick<
+      RuntimeManagerOptions,
+      "timeoutMs" | "maxOutputBytes" | "tempRoot" | "idleTimeoutMs" | "clientTimeoutMs"
+    >
   > &
     Pick<RuntimeManagerOptions, "octavePath">;
-  private readonly runtimes = new Map<string, OctaveRuntime>();
+  private readonly runtimes = new Map<string, ManagedRuntime>();
+  private readonly clientSlots = new Map<string, ClientRuntimeSlots>();
+  private readonly clientLeases = new Map<string, ClientLease>();
+  private lifecycleQueue: Promise<unknown> = Promise.resolve();
   private executablePromise: Promise<string> | null = null;
+  private accepting = true;
   private readonly exitHandler = () => {
-    for (const runtime of this.runtimes.values()) runtime.killForProcessExit();
+    for (const managed of this.runtimes.values()) {
+      if (managed.idleTimer) clearTimeout(managed.idleTimer);
+      managed.runtime.killForProcessExit();
+    }
+    for (const lease of this.clientLeases.values()) {
+      if (lease.timer) clearTimeout(lease.timer);
+    }
   };
 
   constructor(options: RuntimeManagerOptions) {
@@ -495,51 +556,201 @@ class RuntimeManagerImpl implements RuntimeManager {
         "maxOutputBytes",
       ),
       tempRoot: resolve(options.tempRoot ?? tmpdir()),
+      idleTimeoutMs: positiveInteger(
+        options.idleTimeoutMs,
+        DEFAULT_IDLE_TIMEOUT_MS,
+        "idleTimeoutMs",
+      ),
+      clientTimeoutMs: positiveInteger(
+        options.clientTimeoutMs,
+        DEFAULT_CLIENT_TIMEOUT_MS,
+        "clientTimeoutMs",
+      ),
     };
     process.once("exit", this.exitHandler);
   }
 
-  async open(documentId: string): Promise<{ runtimeId: string }> {
+  async open(documentId: string, clientId = "legacy"): Promise<{ runtimeId: string }> {
     if (typeof documentId !== "string" || documentId.trim() === "") {
       throw new TypeError("documentId must be a non-empty string");
     }
-    const executable = await (this.executablePromise ??= discoverOctave(this.options.octavePath));
-    const runtime = await OctaveRuntime.create(
-      documentId,
-      executable,
-      this.options.tempRoot,
-      this.options.timeoutMs,
-      this.options.maxOutputBytes,
-    );
-    this.runtimes.set(runtime.runtimeId, runtime);
-    return { runtimeId: runtime.runtimeId };
+    validateClientId(clientId);
+    this.heartbeat(clientId);
+    const role: RuntimeRole = documentId.startsWith("help-") ? "help" : "notebook";
+
+    return this.serialize(async () => {
+      if (!this.accepting) throw new RuntimeOperationalError("Runtime manager is shutting down");
+      const slots = this.clientSlots.get(clientId) ?? {};
+      const occupiedId = slots[role];
+      if (occupiedId) {
+        const occupied = this.runtimes.get(occupiedId);
+        if (role === "help" && occupied?.runtime.alive) {
+          throw new RuntimeOperationalError("The help runtime for this client is busy");
+        }
+        if (occupied) await this.closeManaged(occupiedId, occupied);
+      }
+
+      const executable = await (this.executablePromise ??= discoverOctave(this.options.octavePath));
+      const runtime = await OctaveRuntime.create(
+        documentId,
+        executable,
+        this.options.tempRoot,
+        this.options.timeoutMs,
+        this.options.maxOutputBytes,
+      );
+      const now = Date.now();
+      const managed: ManagedRuntime = {
+        runtime,
+        clientId,
+        role,
+        createdAt: now,
+        lastActivityAt: now,
+        idleTimer: null,
+      };
+      this.runtimes.set(runtime.runtimeId, managed);
+      const currentSlots = this.clientSlots.get(clientId) ?? {};
+      currentSlots[role] = runtime.runtimeId;
+      this.clientSlots.set(clientId, currentSlots);
+      this.touch(runtime.runtimeId, managed);
+      return { runtimeId: runtime.runtimeId };
+    });
   }
 
-  execute(runtimeId: string, input: ExecuteInput): Promise<ExecuteResult> {
-    return this.get(runtimeId).execute(input);
+  async execute(runtimeId: string, input: ExecuteInput): Promise<ExecuteResult> {
+    const managed = this.get(runtimeId);
+    this.touch(runtimeId, managed);
+    try {
+      const result = await managed.runtime.execute(input);
+      if (managed.role !== "help" && managed.runtime.alive) this.touch(runtimeId, managed);
+      return result;
+    } finally {
+      if (managed.role === "help" || !managed.runtime.alive) {
+        await this.close(runtimeId).catch(() => undefined);
+      }
+    }
   }
 
-  inspect(runtimeId: string, expression: string): Promise<InspectResult> {
-    return this.get(runtimeId).inspect(expression);
+  async inspect(runtimeId: string, expression: string): Promise<InspectResult> {
+    const managed = this.get(runtimeId);
+    this.touch(runtimeId, managed);
+    try {
+      const result = await managed.runtime.inspect(expression);
+      if (managed.role !== "help" && managed.runtime.alive) this.touch(runtimeId, managed);
+      return result;
+    } finally {
+      if (managed.role === "help" || !managed.runtime.alive) {
+        await this.close(runtimeId).catch(() => undefined);
+      }
+    }
   }
 
   async close(runtimeId: string): Promise<void> {
-    const runtime = this.runtimes.get(runtimeId);
-    if (!runtime) return;
-    this.runtimes.delete(runtimeId);
-    await runtime.close();
+    await this.serialize(async () => {
+      const managed = this.runtimes.get(runtimeId);
+      if (managed) await this.closeManaged(runtimeId, managed);
+    });
   }
 
   async closeAll(): Promise<void> {
-    const runtimes = [...this.runtimes.values()];
-    this.runtimes.clear();
-    await Promise.allSettled(runtimes.map((runtime) => runtime.close()));
+    this.accepting = false;
+    await this.serialize(async () => {
+      const runtimes = [...this.runtimes.entries()];
+      this.runtimes.clear();
+      this.clientSlots.clear();
+      for (const lease of this.clientLeases.values()) {
+        if (lease.timer) clearTimeout(lease.timer);
+      }
+      this.clientLeases.clear();
+      for (const [, managed] of runtimes) {
+        if (managed.idleTimer) clearTimeout(managed.idleTimer);
+      }
+      await Promise.allSettled(runtimes.map(([, managed]) => managed.runtime.close()));
+    });
   }
 
-  private get(runtimeId: string): OctaveRuntime {
-    const runtime = this.runtimes.get(runtimeId);
-    if (!runtime) throw new RuntimeOperationalError(`Unknown Octave runtime: ${runtimeId}`);
-    return runtime;
+  status(): RuntimeStatus[] {
+    return [...this.runtimes.values()]
+      .map((managed) => ({
+        runtimeId: managed.runtime.runtimeId,
+        documentId: managed.runtime.documentId,
+        clientId: managed.clientId,
+        role: managed.role,
+        pid: managed.runtime.pid,
+        createdAt: new Date(managed.createdAt).toISOString(),
+        lastActivityAt: new Date(managed.lastActivityAt).toISOString(),
+      }))
+      .sort((first, second) => first.createdAt.localeCompare(second.createdAt));
+  }
+
+  heartbeat(clientId: string): void {
+    validateClientId(clientId);
+    if (!this.accepting) return;
+    const previous = this.clientLeases.get(clientId);
+    const generation = (previous?.generation ?? 0) + 1;
+    const lastHeartbeatAt = Date.now();
+    if (previous?.timer) clearTimeout(previous.timer);
+    const lease: ClientLease = { generation, lastHeartbeatAt, timer: null };
+    this.clientLeases.set(clientId, lease);
+    this.scheduleClientLease(clientId, lease, this.options.clientTimeoutMs);
+  }
+
+  private get(runtimeId: string): ManagedRuntime {
+    const managed = this.runtimes.get(runtimeId);
+    if (!managed) throw new RuntimeOperationalError(`Unknown Octave runtime: ${runtimeId}`);
+    return managed;
+  }
+
+  private touch(runtimeId: string, managed: ManagedRuntime): void {
+    if (this.runtimes.get(runtimeId) !== managed) return;
+    managed.lastActivityAt = Date.now();
+    if (managed.idleTimer) clearTimeout(managed.idleTimer);
+    managed.idleTimer = setTimeout(() => {
+      void this.close(runtimeId);
+    }, this.options.idleTimeoutMs);
+    managed.idleTimer.unref();
+  }
+
+  private scheduleClientLease(clientId: string, lease: ClientLease, delayMs: number): void {
+    if (lease.timer) clearTimeout(lease.timer);
+    const generation = lease.generation;
+    lease.timer = setTimeout(() => {
+      void this.serialize(async () => {
+        const current = this.clientLeases.get(clientId);
+        if (!current || current.generation !== generation) return;
+        const remaining = this.options.clientTimeoutMs - (Date.now() - current.lastHeartbeatAt);
+        if (remaining > 0) {
+          this.scheduleClientLease(clientId, current, remaining);
+          return;
+        }
+        this.clientLeases.delete(clientId);
+        const slots = this.clientSlots.get(clientId);
+        for (const runtimeId of [slots?.notebook, slots?.help]) {
+          if (!runtimeId) continue;
+          const managed = this.runtimes.get(runtimeId);
+          if (managed) await this.closeManaged(runtimeId, managed);
+        }
+      });
+    }, delayMs);
+    lease.timer.unref();
+  }
+
+  private async closeManaged(runtimeId: string, managed: ManagedRuntime): Promise<void> {
+    if (this.runtimes.get(runtimeId) !== managed) return;
+    this.runtimes.delete(runtimeId);
+    if (managed.idleTimer) clearTimeout(managed.idleTimer);
+    const slots = this.clientSlots.get(managed.clientId);
+    if (slots?.[managed.role] === runtimeId) delete slots[managed.role];
+    if (slots && !slots.notebook && !slots.help) this.clientSlots.delete(managed.clientId);
+    await managed.runtime.close();
+  }
+
+  private serialize<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.lifecycleQueue.then(operation, operation);
+    this.lifecycleQueue = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
   }
 }
 
@@ -694,4 +905,15 @@ function positiveInteger(value: number | undefined, fallback: number, name: stri
     throw new TypeError(`${name} must be a positive integer`);
   }
   return value;
+}
+
+function validateClientId(clientId: string): void {
+  if (
+    typeof clientId !== "string" ||
+    clientId.length < 1 ||
+    clientId.length > 128 ||
+    !/^[a-zA-Z0-9_.:-]+$/.test(clientId)
+  ) {
+    throw new TypeError("clientId must be a non-empty identifier of at most 128 characters");
+  }
 }

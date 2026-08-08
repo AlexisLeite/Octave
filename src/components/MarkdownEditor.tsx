@@ -173,6 +173,42 @@ export function MarkdownEditor({ value, onChange, onSplitSelection, viewStateKey
     setSelectionToolbar(null)
   }
 
+  function syncCoveredMathSelection() {
+    const editor = view.current
+    const editorMount = mount.current
+    if (!editor || !editorMount) return
+    const selectedRange = selectedDocumentRange(editor, editorMount)
+
+    editorMount.querySelectorAll<HTMLElement>('[data-math]').forEach((math) => {
+      let covered = false
+      if (selectedRange) {
+        try {
+          const mapped = editor.posAtDOM(math, 0, -1)
+          const resolved = editor.state.doc.resolve(Math.max(0, Math.min(mapped, editor.state.doc.content.size)))
+          const nodeAfter = resolved.nodeAfter
+          const nodeBefore = resolved.nodeBefore
+          const mathFrom = nodeAfter?.type.name.startsWith('math_')
+            ? mapped
+            : nodeBefore?.type.name.startsWith('math_')
+              ? mapped - nodeBefore.nodeSize
+              : null
+          const mathTo = nodeAfter?.type.name.startsWith('math_')
+            ? mapped + nodeAfter.nodeSize
+            : nodeBefore?.type.name.startsWith('math_')
+              ? mapped
+              : null
+          covered = mathFrom !== null
+            && mathTo !== null
+            && selectedRange.from <= mathFrom
+            && selectedRange.to >= mathTo
+        } catch {
+          // A detached KaTeX node during HMR is cleared on the next selection.
+        }
+      }
+      math.classList.toggle('math-selection-covered', covered)
+    })
+  }
+
   function showSelectionToolbarAt(clientX: number, clientY: number) {
     const editor = view.current
     const editorMount = mount.current
@@ -307,6 +343,7 @@ export function MarkdownEditor({ value, onChange, onSplitSelection, viewStateKey
           }
         }
         if (next.selection.empty) hideSelectionToolbar()
+        window.requestAnimationFrame(syncCoveredMathSelection)
         if (viewStateKeyRef.current) {
           localStorage.setItem(`octave-markdown-view-v1:${viewStateKeyRef.current}`, JSON.stringify({
             selection: next.selection.toJSON(),
@@ -343,6 +380,7 @@ export function MarkdownEditor({ value, onChange, onSplitSelection, viewStateKey
   useEffect(() => {
     const handleSelectionChange = () => {
       window.requestAnimationFrame(() => {
+        syncCoveredMathSelection()
         if (view.current?.state.selection.empty || window.getSelection()?.isCollapsed) {
           hideSelectionToolbar()
         }
@@ -359,6 +397,9 @@ export function MarkdownEditor({ value, onChange, onSplitSelection, viewStateKey
       document.removeEventListener('selectionchange', handleSelectionChange)
       document.removeEventListener('pointerdown', handlePointerDown, true)
       document.removeEventListener('scroll', handleScroll, true)
+      mount.current?.querySelectorAll<HTMLElement>('.math-selection-covered').forEach((math) => {
+        math.classList.remove('math-selection-covered')
+      })
     }
   }, [])
 

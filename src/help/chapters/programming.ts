@@ -1,6 +1,7 @@
 import { type HelpNode, markdown, code, topic } from '../helpTypes'
+import { withPedagogicalClosures } from './pedagogicalClosures'
 
-export const programmingHelp: HelpNode[] = [
+export const programmingHelp: HelpNode[] = withPedagogicalClosures([
   topic(
     'programacion-control',
     'Control de flujo: decidir y repetir',
@@ -213,8 +214,35 @@ while (b - a) > tolerancia && iter < 100
   iter += 1;
 endwhile
 raiz = (a + b) / 2;
-assert(abs(raiz - sqrt(2)) < tolerancia);`, 'Bisección con invariante'),
+        assert(abs(raiz - sqrt(2)) < tolerancia);`, 'Bisección con invariante'),
       ], [], ['while', 'terminación', 'invariante', 'tolerancia']),
+
+      topic('programacion-do-until', 'do…until: ejecutar antes de comprobar', [
+        markdown(`do…until es el segundo bucle condicional de Octave. Ejecuta el cuerpo **al menos una vez** y comprueba la condición al final. Repite mientras la condición sea falsa y termina cuando se vuelve verdadera; por eso **until listo** expresa lo contrario de **while !listo**.
+
+La forma es **do … until (condición)**. A diferencia de otros bloques, no se cierra con **end**: la propia cláusula **until** cierra el bucle.`),
+        code(`clear;
+intentos = 0;
+do
+  intentos += 1;
+  valor = intentos^2;
+until (valor >= 20)
+assert(intentos == 5 && valor == 25);`, 'El cuerpo se ejecuta antes de evaluar'),
+        markdown(`Elige do…until cuando la primera ejecución sea obligatoria: pedir y validar una entrada, producir el primer término de una iteración o leer antes de decidir si continuar. El estado usado por **until** debe actualizarse en todas las rutas del cuerpo.
+
+**Error frecuente:** leer **until** como si fuera **while**. **until error** se detiene cuando hay error; no continúa mientras haya error. Conserva también un límite de seguridad en algoritmos numéricos.`),
+        code(`clear;
+x = 1;
+iter = 0;
+max_iter = 30;
+do
+  anterior = x;
+  x = 0.5 * (x + 2 / x);
+  iter += 1;
+  convergio = abs(x - anterior) <= 1e-12;
+until (convergio || iter >= max_iter)
+assert(convergio && abs(x - sqrt(2)) < 1e-12);`, 'Newton con condición de salida'),
+      ], [], ['do', 'until', 'do until', 'bucle', 'postcondición', 'al menos una vez']),
     ],
     ['control', 'if', 'switch', 'for', 'while', 'break', 'continue'],
   ),
@@ -372,6 +400,59 @@ endif
 fprintf('contexto: %s%s, carpeta: %s\\n', nombre, extension, carpeta);
 assert(ischar(carpeta));`, 'Rutas independientes del directorio actual'),
       ], [], ['script', 'función', 'archivo m', 'mfilename', 'addpath', 'which']),
+
+      topic('programacion-archivos-resolucion', 'Archivos, subfunciones y funciones anidadas', [
+        markdown(`Una función pública llamada calibrar suele vivir en calibrar.m y ser la primera función del archivo. Las funciones que aparecen después son **subfunciones**: comparten el archivo, pero tienen sus propios alcances y normalmente solo las llaman funciones de ese archivo. Así se expone una API pequeña y se ocultan detalles.
+
+Una **función anidada** se declara dentro del cuerpo de otra y puede leer o modificar variables del alcance exterior. Esa memoria compartida es útil para construir callbacks con estado, pero crea acoplamiento; mantenla breve y explícita.`),
+        code(`clear;
+function y = estandarizar(x)
+  validar_vector(x);
+  centro = mean(x);
+  escala = std(x);
+  assert(escala > 0, 'Los valores no pueden ser todos iguales');
+  y = (x - centro) ./ escala;
+endfunction
+
+function validar_vector(x)
+  assert(isnumeric(x) && isvector(x) && !isempty(x));
+  assert(all(isfinite(x)));
+endfunction
+
+y = estandarizar([1, 2, 4, 8]);
+assert(abs(mean(y)) < 1e-12 && abs(std(y) - 1) < 1e-12);`, 'Función principal y auxiliar local'),
+        markdown(`Octave busca nombres entre funciones incorporadas, el archivo actual, el directorio y el load path según reglas de precedencia. which nombre muestra qué implementación se eligió; which -all nombre revela colisiones y exist distingue archivos, variables y built-ins. Cambiar cd no es gestión de dependencias.
+
+**Criterio:** una función pública por archivo homónimo; subfunciones para detalles compartidos dentro del archivo; función anidada solo cuando compartir estado aporta claridad. Error frecuente: crear sin.m o mean.m y ocultar una función estándar. **Ejercicio:** divide un cálculo en validar, transformar y resumir, dejando pública solo la operación completa.`),
+        code(`clear;
+function [incrementar, consultar] = crear_contador(inicial)
+  valor = inicial;
+  function actual = sumar(paso)
+    valor += paso;
+    actual = valor;
+  endfunction
+  function actual = leer()
+    actual = valor;
+  endfunction
+  incrementar = @sumar;
+  consultar = @leer;
+endfunction
+
+[sumar, leer] = crear_contador(10);
+assert(sumar(3) == 13 && leer() == 13);
+assert(sumar(-1) == 12 && leer() == 12);`, 'Una función anidada comparte estado'),
+        markdown(`Los cierres anidados pueden prolongar la vida de sus variables mientras exista un handle. No confundas ese estado compartido con persistent: el cierre pertenece a cada invocación creadora; persistent pertenece a la función. Para inspeccionar resolución usa path, addpath/rmpath temporalmente y restaura cambios globales.
+
+Error frecuente: depender de una subfunción desde otro archivo; no forma parte de la API pública. **Ejercicio:** crea dos contadores con valores iniciales diferentes y demuestra que no comparten estado.`),
+        code(`clear;
+ubicacion_mean = which('mean');
+assert(ischar(ubicacion_mean) && !isempty(ubicacion_mean));
+assert(exist('mean', 'file') || exist('mean', 'builtin'));
+
+partes = strsplit(path(), pathsep());
+assert(iscell(partes) && !isempty(partes));
+fprintf('mean se resuelve como: %s\\n', ubicacion_mean);`, 'Inspeccionar resolución de nombres'),
+      ], [], ['archivo m', 'subfunción', 'función anidada', 'nested function', 'which', 'exist', 'path', 'resolución']),
     ],
     ['funciones', 'scope', 'argumentos', 'handles', 'scripts'],
   ),
@@ -497,6 +578,49 @@ unlink(ruta);
 assert(strcmp(inventario(1).name, 'experimento'));
 assert(isequal(datos.experimento.y, experimento.y));`, 'Inspeccionar y cargar selectivamente'),
       ], [], ['csv', 'mat', 'save', 'load', 'tempname', 'recursos']),
+
+      topic('programacion-json-procesos', 'JSON, UTF-8 y procesos externos', [
+        markdown(`JSON intercambia estructuras, celdas, texto, lógicos y números con otros lenguajes. jsonencode serializa y jsondecode reconstruye tipos de Octave compatibles. JSON no conserva clases numéricas como single o int16, matrices complejas ni sparse de forma automática: define un esquema con versión, forma, unidades y representación explícita.
+
+El texto intercambiado debe tener una codificación acordada, normalmente UTF-8. Valida campos con isfield, tamaños y valores antes de calcular; que el JSON sea sintácticamente válido no demuestra que respete tu contrato.`),
+        code(`clear;
+mensaje.version = 1;
+mensaje.unidad = 'm/s';
+mensaje.forma = [2, 2];
+mensaje.valores = [1.5, 2.0; 3.25, 4.75];
+texto = jsonencode(mensaje);
+vuelta = jsondecode(texto);
+assert(vuelta.version == 1);
+assert(strcmp(vuelta.unidad, 'm/s'));
+assert(isequal(vuelta.forma(:).', [2, 2]));
+assert(isequal(vuelta.valores, mensaje.valores));`, 'Un contrato JSON versionado'),
+        markdown(`system ejecuta un proceso y devuelve [estado,salida]. estado=0 suele indicar éxito; cualquier otro valor debe tratarse como fallo y acompañarse con la salida de diagnóstico. Las reglas de comillas y rutas dependen del sistema operativo.
+
+No construyas comandos concatenando nombres, rutas u opciones externas: caracteres especiales pueden cambiar la orden. Prefiere una API, archivos temporales con rutas controladas o una capa que cite cada argumento según la plataforma. Para Python, un contrato robusto es: Octave escribe entrada.json, ejecuta un script fijo, comprueba estado y valida salida.json.`),
+        code(`clear;
+if ispc()
+  comando = 'cmd /c echo OCTAVE_OK';
+else
+  comando = 'printf OCTAVE_OK';
+endif
+[estado, salida] = system(comando);
+assert(estado == 0, 'El proceso externo falló: %s', salida);
+assert(!isempty(strfind(salida, 'OCTAVE_OK')));
+fprintf('estado=%d, salida=%s\\n', estado, strtrim(salida));`, 'Comprobar estado y salida de un proceso'),
+        markdown(`**Criterio de formato:** MAT para máxima fidelidad Octave/MATLAB; CSV para una tabla rectangular simple; JSON para mensajes estructurados interoperables; binario propio solo si existe una especificación estable. **Criterio de ejecución:** biblioteca/API antes que proceso; proceso con comando fijo antes que comando armado dinámicamente.
+
+Errores frecuentes: asumir que JSON preserva NaN/Inf de forma portable, ignorar el código de salida, confiar en el directorio actual o leer un archivo de salida viejo tras un fallo. **Ejercicio:** diseña el esquema JSON de una matriz compleja guardando real, imag, size y versión; decodifica y reconstruye con complex.`),
+        code(`clear;
+z = [1 + 2i, 3 - 4i];
+paquete.version = 1;
+paquete.forma = size(z);
+paquete.real = real(z);
+paquete.imag = imag(z);
+texto = jsonencode(paquete);
+datos = jsondecode(texto);
+reconstruido = reshape(complex(datos.real, datos.imag), datos.forma);
+assert(isequal(reconstruido, z));`, 'Representar explícitamente un tipo no nativo de JSON'),
+      ], [], ['JSON', 'jsonencode', 'jsondecode', 'UTF-8', 'system', 'proceso', 'Python', 'código de salida', 'interoperabilidad']),
     ],
     ['entrada', 'salida', 'archivos', 'CSV', 'MAT', 'recursos'],
   ),
@@ -667,4 +791,4 @@ assert(isequal(resumen.media, [3, 20]));`, 'Núcleo comprobable de un flujo mayo
     ],
     ['errores', 'warnings', 'assert', 'depuración', 'pruebas', 'buenas prácticas'],
   ),
-]
+])

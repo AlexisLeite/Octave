@@ -1,5 +1,6 @@
 import { type HelpNode, markdown, code, topic } from '../helpTypes'
 import { operatorHelp } from './operators'
+import { withPedagogicalClosures } from './pedagogicalClosures'
 import { valueTypeHelp } from './valueTypes'
 
 const foundationSections: HelpNode[] = [
@@ -48,6 +49,56 @@ disp(primera_linea);
 r = sqrt([0, 1, 4, 9]);
 assert(isequal(r, [0, 1, 2, 3]));`, 'Consultar y comprobar'),
       ], [], ['sintaxis', 'comentarios', 'help', 'lookfor', 'precedencia']),
+
+      topic('fundamentos-constantes', 'Constantes matemáticas y numéricas', [
+        markdown(`Octave ofrece nombres listos para valores universales. **pi** representa la razón entre la circunferencia y su diámetro, mientras que **e** es el número de Euler, base de los logaritmos naturales. Para calcular $e^x$ se recomienda **exp(x)**: funciona tanto con escalares como con arreglos y expresa directamente la operación matemática.
+
+No confundas el número e con la notación científica: 1e-3 significa $1\times10^{-3}$, no $e^{-3}$. Como los nombres pueden ser ocultados por variables, evita asignar valores a pi o e; si ocurre, clear pi o clear e recupera la constante integrada.`),
+        code(`clear;
+radio = 3;
+area = pi * radio^2;
+e_al_cuadrado = exp(2);
+
+fprintf('pi = %.15f\n', pi);
+fprintf('e  = %.15f\n', e);
+fprintf('Área = %.6f, e^2 = %.6f\n', area, e_al_cuadrado);
+assert(abs(exp(1) - e) <= eps(e));`, 'Pi, Euler y la función exp'),
+        markdown(`Las constantes **i** y **j** representan la unidad imaginaria $\sqrt{-1}$. En código reutilizable es más seguro escribir **1i** o **1j**, porque una variable llamada i o j puede ocultar esos nombres. La identidad de Euler conecta las constantes principales: $e^{i\pi}+1=0$, salvo el pequeño error inevitable del punto flotante.`),
+        code(`clear;
+z = 3 + 4i;
+identidad_euler = exp(1i * pi) + 1;
+
+fprintf('|z| = %g\n', abs(z));
+fprintf('|exp(i*pi)+1| = %.3e\n', abs(identidad_euler));
+assert(abs(z) == 5);
+assert(abs(identidad_euler) < 1e-14);`, 'Unidad imaginaria e identidad de Euler'),
+        markdown(`**Inf** y **-Inf** representan infinitos con signo; **NaN** representa un resultado numérico indefinido. No los compares con ==: usa isinf, isnan e isfinite. Son valores de punto flotante y pueden propagarse por un cálculo, por lo que conviene validarlos en los límites de entrada y salida.`),
+        code(`clear;
+datos = [3, Inf, -Inf, NaN, 8];
+finitos = datos(isfinite(datos));
+
+assert(isequal(finitos, [3, 8]));
+assert(isinf(datos(2)) && isnan(datos(4)));
+fprintf('%d finitos, %d infinitos, %d NaN\n', ...
+  nnz(isfinite(datos)), nnz(isinf(datos)), nnz(isnan(datos)));`, 'Infinito, NaN y validación'),
+        markdown(`Octave también expone límites de la representación. **eps(x)** es la separación local entre números representables cerca de x; **realmin** y **realmax** delimitan aproximadamente los valores positivos normalizados de double; **flintmax** es el mayor entero consecutivo representable exactamente. Para enteros tipados existen intmin e intmax.
+
+**Criterio:** usa pi, e y exp para fórmulas; 1i para complejos; isfinite para validar; eps como escala de precisión, no como tolerancia universal. **Error frecuente:** comparar resultados calculados con == o creer que realmin es el número negativo más pequeño. **Ejercicio:** calcula $\sin(\pi)$, explica por qué no es exactamente cero y compruébalo con una tolerancia basada en eps.`),
+        code(`clear;
+limites = [realmin, realmax, flintmax];
+error_seno = abs(sin(pi));
+
+fprintf('eps(1) = %.3e\n', eps(1));
+fprintf('realmin = %.3e, realmax = %.3e\n', realmin, realmax);
+fprintf('flintmax = %.0f\n', flintmax);
+assert(error_seno < 2 * eps(pi));
+assert(intmax('int8') == 127 && intmin('int8') == -128);`, 'Precisión y límites representables'),
+      ], [], [
+        'e', 'Euler', 'número de Euler', 'numero de Euler', 'constante de Euler',
+        'pi', 'π', 'constantes', 'exp', 'exponencial', 'i', 'j', 'unidad imaginaria',
+        'identidad de Euler', 'Inf', 'infinito', 'NaN', 'eps', 'realmin', 'realmax',
+        'flintmax', 'intmin', 'intmax', 'límites numéricos',
+      ]),
 
       ...valueTypeHelp,
 
@@ -126,6 +177,50 @@ assert(isequal(posiciones, [3, 4]));
 assert(isequal(valores, [0.25, 0.8]));
 fprintf('hay %d valores interiores\\n', nnz(interior));`, 'Combinar condiciones'),
       ], [], ['máscara', 'logical', 'find', 'filtrar']),
+
+      topic('fundamentos-indexacion-avanzada', 'Listas de índices, escritura, borrado y N-D', [
+        markdown(`Un índice puede ser un escalar, un rango, una lista de enteros positivos o una máscara logical. A([3,1,3]) selecciona en ese orden y puede repetir posiciones. Con dos o más índices, cada dimensión se elige por separado: A(filas,columnas,paginas).
+
+Leer y escribir comparten coordenadas. A(indices)=valor asigna un escalar a todas las posiciones; para varios valores, la cantidad y forma deben ser compatibles. end+1 designa la siguiente posición y permite crecer, aunque en bucles conviene preasignar.`),
+        code(`clear;
+A = reshape(1:12, 3, 4);
+filas = [3, 1];
+columnas = [4, 2];
+bloque = A(filas, columnas);
+assert(isequal(bloque, [12, 6; 10, 4]));
+
+v = [10, 20, 30];
+repetidos = v([3, 1, 3]);
+assert(isequal(repetidos, [30, 10, 30]));`, 'Seleccionar, reordenar y repetir'),
+        markdown(`Asignar [] borra elementos: v(2)=[] acorta un vector y A(:,2)=[] borra una columna completa. En matrices, solo puedes borrar de forma coherente una fila, columna o selección lineal; no dejes un “agujero” rectangular. A(end+1)=x agrega a un vector, mientras A(fila,end+1)=... agrega una columna si las filas son compatibles.
+
+Error frecuente: usar cero, negativos, fracciones o NaN como índices; los índices numéricos empiezan en 1 y deben ser enteros válidos. Otro error es crecer una matriz miles de veces. **Criterio:** listas para posiciones conocidas, máscaras para reglas, find solo si necesitas números de posición. **Ejercicio:** elimina de un vector todos los no finitos, agrega una muestra al final y conserva orientación de fila.`),
+        code(`clear;
+v = [10, 20, 30, 40];
+v(2) = [];
+v(end + 1) = 50;
+assert(isequal(v, [10, 30, 40, 50]));
+
+A = reshape(1:12, 3, 4);
+A(:, 2) = [];
+assert(isequal(size(A), [3, 3]));
+A(:, end + 1) = [100; 200; 300];
+assert(isequal(A(:, end), [100; 200; 300]));`, 'Borrar y crecer deliberadamente'),
+        markdown(`En N-D, usa tantos subíndices como ejes quieras distinguir: volumen(:,:,2) selecciona una página. Si das menos índices que dimensiones, Octave combina dimensiones restantes para la indexación; esa regla es potente pero poco obvia. En código pedagógico o reusable, especifica todos los ejes importantes.
+
+La forma del resultado depende del contexto y de la forma de los índices. Si el contrato exige fila o columna, normaliza con x(:) para columna o x(:).' para fila. **Ejercicio:** crea un arreglo 2x3x4, selecciona páginas 4 y 1 en ese orden y reemplaza toda la página 2 por cero.`),
+        code(`clear;
+volumen = reshape(1:24, [2, 3, 4]);
+paginas = volumen(:, :, [4, 1]);
+assert(isequal(size(paginas), [2, 3, 2]));
+assert(isequal(paginas(:, :, 1), volumen(:, :, 4)));
+
+volumen(:, :, 2) = 0;
+pagina_2 = volumen(:, :, 2);
+pagina_1 = volumen(:, :, 1);
+assert(all(pagina_2(:) == 0));
+assert(any(pagina_1(:) != 0));`, 'Indexar páginas N-D'),
+      ], [], ['índices', 'lista', 'end+1', 'borrar', 'eliminar', 'crecer', 'N-D', 'páginas', 'asignación indexada']),
 
       ...operatorHelp,
 
@@ -284,26 +379,37 @@ assert(numel(A) == 12 && length(A) == 4);
 fprintf('A: %d filas, %d columnas\\n', rows(A), columns(A));`, 'Orientación y medidas'),
       ], [], ['escalar', 'vector', 'matriz', 'transpuesta']),
 
-      topic('fundamentos-dimensiones', 'Dimensiones y cambio de forma', [
-        markdown(`size consulta forma, ndims cuenta dimensiones y numel cuenta posiciones. reshape cambia la forma preservando el orden lineal; debe conservarse el número $N$ de elementos, es decir, el producto de las nuevas dimensiones también debe ser $N$.`),
-        code(`clear;
-v = 1:12;
-A = reshape(v, 3, 4);
-B = reshape(A, 2, 2, 3);
-assert(numel(v) == numel(A) && numel(A) == numel(B));
-assert(isequal(size(A), [3, 4]));
-assert(isequal(size(B), [2, 2, 3]));
-disp(A);`, 'Mismos elementos, otra forma'),
-        markdown(`Octave almacena matrices por columnas: A(:) recorre primero la primera columna. Error frecuente: predecir reshape como si llenara filas. Usa assert(size(...)) en contratos importantes y no apliques squeeze sin comprobar qué dimensiones unitarias eliminará.
+      topic('fundamentos-dimensiones', 'Leer la forma y las dimensiones', [
+        markdown(`Lee una forma de izquierda a derecha. En una matriz de tamaño $m\times n$, la dimensión 1 contiene las **filas** y la dimensión 2 las **columnas**. Un escalar mide $1\times1$, un vector fila $1\times n$ y un vector columna $n\times1$. Octave considera que todo arreglo tiene al menos dos dimensiones.
 
-**Pregunta:** dibuja dónde quedará el 5 en reshape(1:6,2,3).`),
+**size(A)** devuelve el vector de longitudes; **size(A,k)** consulta solo el eje $k$. **rows(A)** y **columns(A)** nombran los dos primeros ejes. Empieza por estas funciones antes de estudiar reshape o indexación N-D.`),
         code(`clear;
-A = reshape(1:6, 2, 3);
-lineal = A(:);
-assert(isequal(lineal, (1:6).'));
-assert(A(1, 3) == 5);
-fprintf('A(1,3)=%d\\n', A(1, 3));`, 'Orden por columnas'),
-      ], [], ['size', 'ndims', 'numel', 'reshape']),
+escalar = 7;
+fila = [10, 20, 30, 40];
+columna = fila.';
+A = zeros(3, 5);
+assert(isequal(size(escalar), [1, 1]));
+assert(isequal(size(fila), [1, 4]));
+assert(isequal(size(columna), [4, 1]));
+assert(rows(A) == 3 && columns(A) == 5);
+assert(size(A, 1) == 3 && size(A, 2) == 5);`, 'Escalar, fila, columna y matriz'),
+        markdown(`Estas medidas responden preguntas distintas:
+
+- **numel(A)**: cantidad total de valores, el producto de la forma.
+- **ndims(A)**: cantidad de ejes reportados; nunca es menor que 2 y omite dimensiones unitarias finales.
+- **length(A)**: longitud del eje más largo. En matrices suele ser ambiguo; prefiere size o numel.
+- **isscalar**, **isvector**, **isrow**, **iscolumn** e **ismatrix**: comprueban la clase de forma que exige tu función.
+
+Error frecuente: decir que una matriz $3\times5$ “tiene tamaño 5” porque length devuelve 5. Su forma sigue siendo $3\times5$ y contiene 15 valores.`),
+        code(`clear;
+V = zeros(2, 3, 4);
+assert(isequal(size(V), [2, 3, 4]));
+assert(size(V, 1) == 2 && size(V, 2) == 3 && size(V, 3) == 4);
+assert(size(V, 5) == 1);
+assert(ndims(V) == 3 && numel(V) == 24 && length(V) == 4);
+assert(!isvector(V) && !ismatrix(V));
+fprintf('forma: %dx%dx%d; elementos: %d\\n', size(V), numel(V));`, 'Cada función responde una pregunta'),
+      ], [], ['dimensiones', 'size', 'rows', 'columns', 'ndims', 'numel', 'length', 'isvector', 'isrow', 'iscolumn', 'forma']),
 
       topic('fundamentos-construccion', 'Construcción y concatenación', [
         markdown(`zeros, ones y eye hacen explícita la forma y evitan crecer arreglos paso a paso. La concatenación horizontal $[A\ B]$ exige igual número de filas; la vertical $[A;B]$, igual número de columnas.`),
@@ -328,6 +434,29 @@ assert(isequal(size(mosaico), [4, 6]));
 assert(isequal(size(volumen), [2, 2, 2]));`, 'Repetir y apilar'),
       ], [], ['zeros', 'ones', 'eye', 'cat', 'repmat']),
 
+      topic('fundamentos-cambio-forma', 'Cambiar forma sin cambiar los datos', [
+        markdown(`reshape cambia las coordenadas sin cambiar la cantidad ni el orden lineal de los valores. Por eso el producto de la forma nueva debe ser igual a numel(A). Escribe primero la forma de origen y la de destino; luego comprueba ambas con size.`),
+        code(`clear;
+v = 1:12;
+A = reshape(v, 3, 4);
+B = reshape(A, 2, 2, 3);
+assert(isequal(size(v), [1, 12]));
+assert(isequal(size(A), [3, 4]));
+assert(isequal(size(B), [2, 2, 3]));
+assert(numel(v) == numel(A) && numel(A) == numel(B));`, 'Una cantidad, tres formas'),
+        markdown(`Octave almacena y recorre por columnas: **A(:)** toma primero toda la columna 1, luego la 2. reshape conserva exactamente ese orden; no transpone ni “rellena por filas”. **permute** sí cambia el significado de los ejes. **squeeze** elimina ejes unitarios y puede alterar la orientación, así que úsalo solo cuando ese cambio forme parte del contrato.
+
+Error frecuente: aplicar reshape hasta que una operación deje de fallar. **Criterio:** size para observar, reshape para reinterpretar una secuencia, permute para reordenar ejes y transposición para intercambiar fila/columna.`),
+        code(`clear;
+A = reshape(1:6, 2, 3);
+lineal = A(:);
+T = permute(A, [2, 1]);
+assert(isequal(lineal, (1:6).'));
+assert(A(1, 3) == 5);
+assert(isequal(size(T), [3, 2]));
+assert(T(3, 1) == A(1, 3));`, 'Orden lineal frente a orden de ejes'),
+      ], [], ['reshape', 'A(:)', 'permute', 'squeeze', 'orden por columnas', 'cambio de forma']),
+
       topic('fundamentos-min-max', 'Mínimos y máximos con min y max', [
         markdown(`min y max responden dos preguntas: **qué valor extremo hay** y, opcionalmente, **dónde apareció primero**. Con un vector, min(x) y max(x) devuelven escalares. Con una matriz operan por la primera dimensión no unitaria, normalmente cada columna; el segundo resultado devuelve el índice dentro de esa dimensión.
 
@@ -349,12 +478,12 @@ GNU Octave ignora NaN cuando hay otro valor numérico en la reducción; si todos
 A = [3, 1, 9; 4, 8, 2];
 [por_columna, filas] = max(A);
 por_fila = max(A, [], 2);
-[global, k] = max(A(:));
+[maximo_global, k] = max(A(:));
 [fila, columna] = ind2sub(size(A), k);
 assert(isequal(por_columna, [4, 8, 9]));
 assert(isequal(filas, [2, 2, 1]));
 assert(isequal(por_fila, [9; 8]));
-assert(global == 9 && fila == 1 && columna == 3);`, 'Elegir dimensión y recuperar coordenadas'),
+assert(maximo_global == 9 && fila == 1 && columna == 3);`, 'Elegir dimensión y recuperar coordenadas'),
         markdown(`Errores frecuentes: suponer que max(A) busca en toda la matriz; olvidar que un empate devuelve la primera posición; confundir max(A,B) con max(A,[],dim); y usar max para recortar valores sin documentar el límite. En datos complejos, “mayor” debe tener un criterio explícito.
 
 **Criterio:** pide índice solo si necesitas localizar o modificar el extremo; indica dim cuando los ejes tienen significado; usa A(:) para un extremo global. **Ejercicio:** encuentra el mínimo global de una matriz, informa fila y columna, y después calcula el máximo de cada fila ignorando deliberadamente las entradas no finitas mediante una máscara.`),
@@ -392,13 +521,13 @@ assert(isempty(vacio));
 fprintf('error máximo: %.3g\\n', error_maximo);`, 'Muestreo y precisión'),
       ], [], ['dos puntos', 'colon', 'linspace', 'rango']),
     ],
-    ['arreglos', 'dimensiones', 'construcción', 'rangos'],
+    ['arreglos', 'formas', 'construcción', 'rangos'],
   ),
 ]
 
-export const foundationHelp: HelpNode[] = [
+export const foundationHelp: HelpNode[] = withPedagogicalClosures([
   foundationSections[0],
   foundationSections[3],
   foundationSections[1],
   foundationSections[2],
-]
+])

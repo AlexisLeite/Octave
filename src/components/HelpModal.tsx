@@ -2,7 +2,7 @@ import { ChevronDown, ChevronRight, Play, RotateCcw, Search, X } from 'lucide-re
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api'
-import { filterHelpTree, findHelpNode, octaveHelp, type HelpBlock, type HelpNode } from '../help/octaveHelp'
+import { findHelpNode, findHelpPath, octaveHelp, searchHelp, type HelpBlock, type HelpNode } from '../help/octaveHelp'
 import type { ExecutionResult } from '../types'
 import { LoadingDot } from './LoadingDot'
 import { OctaveEditor } from './OctaveEditor'
@@ -30,6 +30,8 @@ const HELP_STORAGE = {
   focused: 'octave-help-v1-focused',
   treeScroll: 'octave-help-v1-tree-scroll',
   contentScroll: 'octave-help-v1-content-scroll',
+  lastQuery: 'octave-help-v1-last-query',
+  lastResult: 'octave-help-v1-last-result',
 } as const
 
 function storedString(key: string, fallback: string) {
@@ -138,26 +140,19 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
     const stored = storedString(HELP_STORAGE.focused, octaveHelp[0]?.id ?? '')
     return findHelpNode(octaveHelp, stored) ? stored : octaveHelp[0]?.id ?? ''
   })
+  const [activeResultId, setActiveResultId] = useState('')
   const dialogRef = useRef<HTMLDivElement>(null)
   const searchRef = useRef<HTMLInputElement>(null)
   const treeRef = useRef<HTMLElement>(null)
   const contentRef = useRef<HTMLElement>(null)
   const contentScrollRef = useRef<Record<string, number>>(storedScrollMap())
   const openerRef = useRef<HTMLElement | null>(null)
+  const lastQueryRef = useRef(storedString(HELP_STORAGE.lastQuery, query))
+  const lastResultRef = useRef(storedString(HELP_STORAGE.lastResult, ''))
 
-  const filtered = useMemo(() => filterHelpTree(octaveHelp, query), [query])
-  const effectiveExpanded = useMemo(() => {
-    if (!query.trim()) return expanded
-    const ids = new Set<string>()
-    const addBranches = (nodes: HelpNode[]) => nodes.forEach((item) => {
-      if (item.children?.length) ids.add(item.id)
-      addBranches(item.children ?? [])
-    })
-    addBranches(filtered)
-    return ids
-  }, [expanded, filtered, query])
-  const visible = useMemo(() => flatten(filtered, effectiveExpanded), [effectiveExpanded, filtered])
-  const selected = findHelpNode(octaveHelp, selectedId) ?? firstLeaf(filtered) ?? octaveHelp[0]
+  const results = useMemo(() => searchHelp(octaveHelp, query), [query])
+  const visible = useMemo(() => flatten(octaveHelp, expanded), [expanded])
+  const selected = findHelpNode(octaveHelp, selectedId) ?? firstLeaf(octaveHelp) ?? octaveHelp[0]
 
   useEffect(() => {
     if (!open) return
@@ -172,7 +167,39 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
     }
   }, [open])
 
+  useEffect(() => {
+    if (!open) return
+    function focusSearch(event: KeyboardEvent) {
+      if (event.key !== 'F1') return
+      event.preventDefault()
+      event.stopPropagation()
+      event.stopImmediatePropagation()
+      if (!query.trim() && lastQueryRef.current.trim()) {
+        setActiveResultId(lastResultRef.current)
+        setQuery(lastQueryRef.current)
+      }
+      requestAnimationFrame(() => {
+        searchRef.current?.focus()
+        searchRef.current?.select()
+      })
+    }
+    document.addEventListener('keydown', focusSearch, true)
+    return () => document.removeEventListener('keydown', focusSearch, true)
+  }, [open, query])
+
+  useEffect(() => {
+    if (!query.trim()) return
+    setActiveResultId((current) => results.some((result) => result.node.id === current)
+      ? current
+      : results[0]?.node.id ?? '')
+  }, [query, results])
+
   useEffect(() => { localStorage.setItem(HELP_STORAGE.query, query) }, [query])
+  useEffect(() => {
+    if (!query.trim()) return
+    lastQueryRef.current = query
+    localStorage.setItem(HELP_STORAGE.lastQuery, query)
+  }, [query])
   useEffect(() => { localStorage.setItem(HELP_STORAGE.selected, selectedId) }, [selectedId])
   useEffect(() => { localStorage.setItem(HELP_STORAGE.expanded, JSON.stringify([...expanded])) }, [expanded])
   useEffect(() => { localStorage.setItem(HELP_STORAGE.focused, focusedId) }, [focusedId])
@@ -193,16 +220,6 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
     })
     return () => cancelAnimationFrame(frame)
   }, [open, selected?.id])
-
-  useEffect(() => {
-    if (!query.trim()) return
-    if (findHelpNode(filtered, selectedId)) return
-    const first = firstLeaf(filtered) ?? filtered[0]
-    if (first) {
-      setSelectedId(first.id)
-      setFocusedId(first.id)
-    }
-  }, [filtered, query, selectedId])
 
   if (!open) return null
 
@@ -242,11 +259,11 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
     if (event.key === 'Home') target = visible[0]
     if (event.key === 'End') target = visible[visible.length - 1]
     if (event.key === 'ArrowRight' && current.node.children?.length) {
-      if (!effectiveExpanded.has(id)) setExpanded((value) => new Set(value).add(id))
+      if (!expanded.has(id)) setExpanded((value) => new Set(value).add(id))
       else target = visible[index + 1]
     }
     if (event.key === 'ArrowLeft') {
-      if (current.node.children?.length && effectiveExpanded.has(id)) {
+      if (current.node.children?.length && expanded.has(id)) {
         setExpanded((value) => { const next = new Set(value); next.delete(id); return next })
       } else {
         target = [...visible].slice(0, index).reverse().find((candidate) => candidate.level < current.level)
@@ -262,6 +279,63 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
       requestAnimationFrame(() => dialogRef.current?.querySelector<HTMLElement>(`[data-help-id="${target?.node.id}"]`)?.focus())
     } else if (['ArrowLeft', 'ArrowRight', 'Enter', ' '].includes(event.key)) {
       event.preventDefault()
+    }
+  }
+
+  function openSearchResult(id: string) {
+    const path = findHelpPath(octaveHelp, id)
+    if (!path) return
+    if (query.trim()) {
+      lastQueryRef.current = query
+      localStorage.setItem(HELP_STORAGE.lastQuery, query)
+    }
+    lastResultRef.current = id
+    localStorage.setItem(HELP_STORAGE.lastResult, id)
+    setActiveResultId(id)
+    setExpanded((value) => {
+      const next = new Set(value)
+      path.slice(0, -1).forEach((node) => next.add(node.id))
+      return next
+    })
+    contentScrollRef.current[id] = 0
+    localStorage.setItem(HELP_STORAGE.contentScroll, JSON.stringify(contentScrollRef.current))
+    setSelectedId(id)
+    setFocusedId(id)
+    setQuery('')
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      if (contentRef.current) contentRef.current.scrollTop = 0
+      const treeItem = dialogRef.current?.querySelector<HTMLElement>(`[data-help-id="${id}"]`)
+      treeItem?.scrollIntoView({ block: 'nearest' })
+      treeItem?.focus({ preventScroll: true })
+    }))
+  }
+
+  function moveActiveResult(nextIndex: number) {
+    const next = results[nextIndex]
+    if (!next) return
+    setActiveResultId(next.node.id)
+    requestAnimationFrame(() => {
+      document.getElementById(`help-result-${next.node.id}`)?.scrollIntoView({ block: 'nearest' })
+    })
+  }
+
+  function handleSearchKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (!query.trim() || !results.length) return
+    const currentIndex = results.findIndex((result) => result.node.id === activeResultId)
+    let nextIndex: number | undefined
+    if (event.key === 'ArrowDown') nextIndex = currentIndex < 0 ? 0 : Math.min(results.length - 1, currentIndex + 1)
+    if (event.key === 'ArrowUp') nextIndex = currentIndex < 0 ? 0 : Math.max(0, currentIndex - 1)
+    if (nextIndex !== undefined) {
+      event.preventDefault()
+      event.stopPropagation()
+      moveActiveResult(nextIndex)
+      return
+    }
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      event.stopPropagation()
+      const active = results.find((result) => result.node.id === activeResultId) ?? results[0]
+      openSearchResult(active.node.id)
     }
   }
 
@@ -282,9 +356,18 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
               ref={searchRef}
               type="search"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {
+                setActiveResultId('')
+                setQuery(event.target.value)
+              }}
+              onKeyDown={handleSearchKeyDown}
               placeholder="Buscar"
               aria-label="Buscar en la ayuda"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded={Boolean(query.trim())}
+              aria-controls={query.trim() ? 'help-search-results' : undefined}
+              aria-activedescendant={query.trim() && activeResultId ? `help-result-${activeResultId}` : undefined}
             />
           </label>
           <button type="button" className="help-close" onClick={close} aria-label="Cerrar ayuda">
@@ -292,6 +375,29 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
           </button>
         </header>
 
+        {query.trim() ? (
+          <main id="help-search-results" className="help-results" role="listbox" aria-label="Resultados de búsqueda">
+            {results.map((result) => (
+              <button
+                type="button"
+                id={`help-result-${result.node.id}`}
+                role="option"
+                aria-selected={activeResultId === result.node.id}
+                className={`help-result${activeResultId === result.node.id ? ' active' : ''}`}
+                key={result.node.id}
+                tabIndex={-1}
+                onMouseEnter={() => setActiveResultId(result.node.id)}
+                onClick={() => openSearchResult(result.node.id)}
+              >
+                {result.breadcrumb.length > 0 && (
+                  <span className="help-result-breadcrumb">{result.breadcrumb.join(' / ')}</span>
+                )}
+                <span className="help-result-title">{result.node.title}</span>
+              </button>
+            ))}
+            {!results.length && <div className="help-empty" role="status">Sin resultados</div>}
+          </main>
+        ) : (
         <div className="help-layout">
           <nav
             ref={treeRef}
@@ -302,7 +408,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
           >
             {visible.map(({ node: item, level }) => {
               const hasChildren = Boolean(item.children?.length)
-              const isExpanded = effectiveExpanded.has(item.id)
+              const isExpanded = expanded.has(item.id)
               return (
                 <div
                   key={item.id}
@@ -373,6 +479,7 @@ export function HelpModal({ open, onClose }: HelpModalProps) {
             )}
           </main>
         </div>
+        )}
       </div>
     </div>,
     document.body,

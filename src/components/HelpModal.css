@@ -91,6 +91,53 @@
   grid-template-columns: minmax(220px, 31%) minmax(0, 1fr);
 }
 
+.help-results {
+  min-height: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 8px;
+  background: var(--surface-raised);
+}
+
+.help-result {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 5px;
+  color: var(--text);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+.help-result:hover,
+.help-result.active,
+.help-result:focus-visible {
+  background: var(--selection);
+  outline: none;
+}
+
+.help-result-title {
+  flex: 0 1 auto;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.help-result-breadcrumb {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .help-tree {
   min-width: 0;
   overflow: auto;
@@ -166,12 +213,12 @@
 .help-example-output pre { padding: 9px 12px; border: 0; border-radius: 0; color: inherit; background: transparent; font-size: 11.5px; white-space: pre-wrap; }
 .help-example-output pre + pre { border-top: 1px solid var(--border); }
 
-.help-tree, .help-content, .help-content pre {
+.help-tree, .help-content, .help-results, .help-content pre {
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
 }
-.help-tree::-webkit-scrollbar, .help-content::-webkit-scrollbar, .help-content pre::-webkit-scrollbar { width: 8px; height: 8px; }
-.help-tree::-webkit-scrollbar-thumb, .help-content::-webkit-scrollbar-thumb, .help-content pre::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 8px; background: var(--border-strong); background-clip: padding-box; }
+.help-tree::-webkit-scrollbar, .help-content::-webkit-scrollbar, .help-results::-webkit-scrollbar, .help-content pre::-webkit-scrollbar { width: 8px; height: 8px; }
+.help-tree::-webkit-scrollbar-thumb, .help-content::-webkit-scrollbar-thumb, .help-results::-webkit-scrollbar-thumb, .help-content pre::-webkit-scrollbar-thumb { border: 2px solid transparent; border-radius: 8px; background: var(--border-strong); background-clip: padding-box; }
 
 @media (max-width: 680px) {
   .help-backdrop { padding: 0; }

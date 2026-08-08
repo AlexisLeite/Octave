@@ -35,7 +35,9 @@ export type OctaveEditorProps = {
 
 const MIN_HEIGHT = 32;
 const EMPTY_COMPLETION_SOURCES: string[] = [];
-const EDITOR_MOUNT_REVISION = 'monaco-native-suggest-layout-v1';
+// Bump when mount-time Monaco listeners change: Fast Refresh preserves the
+// existing editor instance and otherwise leaves the previous handlers alive.
+const EDITOR_MOUNT_REVISION = 'monaco-explicit-height-host-v6';
 
 function mapPositionAfterFormatting(
   previous: string,
@@ -82,26 +84,30 @@ export function OctaveEditor({
   completionSources = EMPTY_COMPLETION_SOURCES,
   viewStateKey,
 }: OctaveEditorProps) {
-  const [height, setHeight] = useState(MIN_HEIGHT);
   const [theme, setTheme] = useState(currentEditorTheme);
   const [runtimeReady, setRuntimeReady] = useState(false);
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null);
+  const hostRef = useRef<HTMLDivElement | null>(null);
   const monacoRef = useRef<Monaco | null>(null);
   const onRunRef = useRef(onRun);
   const onFormatRef = useRef(onFormat);
   const onInspectRef = useRef(onInspect);
   const diagnosticsRef = useRef(diagnostics);
+  const completionSourcesRef = useRef(completionSources);
   const inspectorCleanupRef = useRef<() => void>(() => undefined);
   const completionCleanupRef = useRef<() => void>(() => undefined);
   const multiCursorCleanupRef = useRef<() => void>(() => undefined);
   const viewStateKeyRef = useRef(viewStateKey);
   const activeViewStateStorageKeyRef = useRef<string | undefined>(undefined);
   const viewStateTimerRef = useRef(0);
+  const lintTimerRef = useRef(0);
+  const heightRef = useRef(MIN_HEIGHT);
 
   onRunRef.current = onRun;
   onFormatRef.current = onFormat;
   onInspectRef.current = onInspect;
   diagnosticsRef.current = diagnostics;
+  completionSourcesRef.current = completionSources;
   viewStateKeyRef.current = viewStateKey;
 
   const updateMarkers = useCallback(() => {
@@ -110,6 +116,16 @@ export function OctaveEditor({
     if (!monaco || !model) return;
     monaco.editor.setModelMarkers(model, 'octave-local', toMonacoMarkers(monaco, model, lintOctave(model.getValue())));
     monaco.editor.setModelMarkers(model, 'octave-external', toMonacoMarkers(monaco, model, diagnosticsRef.current));
+  }, []);
+
+  const scheduleLocalMarkers = useCallback(() => {
+    window.clearTimeout(lintTimerRef.current);
+    lintTimerRef.current = window.setTimeout(() => {
+      const monaco = monacoRef.current;
+      const model = editorRef.current?.getModel();
+      if (!monaco || !model) return;
+      monaco.editor.setModelMarkers(model, 'octave-local', toMonacoMarkers(monaco, model, lintOctave(model.getValue())));
+    }, 120);
   }, []);
 
   const bindInspector = useCallback(() => {
@@ -168,7 +184,7 @@ export function OctaveEditor({
     updateMarkers();
     completionCleanupRef.current();
     if (instance.getModel()) {
-      completionCleanupRef.current = bindOctaveCompletionSources(instance.getModel()!, completionSources);
+      completionCleanupRef.current = bindOctaveCompletionSources(instance.getModel()!, completionSourcesRef.current);
     }
 
     multiCursorCleanupRef.current();
@@ -180,7 +196,28 @@ export function OctaveEditor({
       event.stopPropagation();
       event.stopImmediatePropagation();
     };
+    const keepNotebookScrollStable = () => {
+      const host = hostRef.current;
+      const scroller = host?.closest<HTMLElement>('.notebook');
+      if (!host || !scroller) return;
+      const hostRect = host.getBoundingClientRect();
+      const viewport = scroller.getBoundingClientRect();
+      const visible = hostRect.bottom > viewport.top && hostRect.top < viewport.bottom;
+      if (!visible) {
+        host.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+        return;
+      }
+
+      const scrollTop = scroller.scrollTop;
+      const scrollLeft = scroller.scrollLeft;
+      window.requestAnimationFrame(() => {
+        if (scroller.scrollTop !== scrollTop || scroller.scrollLeft !== scrollLeft) {
+          scroller.scrollTo({ top: scrollTop, left: scrollLeft, behavior: 'instant' });
+        }
+      });
+    };
     editorDomNode?.addEventListener('keydown', allowBrowserFind, true);
+    editorDomNode?.addEventListener('keydown', keepNotebookScrollStable, true);
     const isMultiCursorShortcut = (event: KeyboardEvent) => (
         !instance.hasTextFocus()
         ? false
@@ -212,21 +249,49 @@ export function OctaveEditor({
       window.removeEventListener('keypress', handleMultiCursorKeyEnd, true);
       window.removeEventListener('keyup', handleMultiCursorKeyEnd, true);
       editorDomNode?.removeEventListener('keydown', allowBrowserFind, true);
+      editorDomNode?.removeEventListener('keydown', keepNotebookScrollStable, true);
     };
 
-    const resize = () => {
+    let applyingLayout = false;
+    const resize = (measuredContentHeight?: number) => {
       const maximum = Math.max(MIN_HEIGHT, Math.floor(window.innerHeight * 0.95));
       const model = instance.getModel();
-      const contentHeight = model
-        ? instance.getBottomForLineNumber(model.getLineCount()) + 5
-        : MIN_HEIGHT;
+      const contentHeight = measuredContentHeight
+        ?? (model ? instance.getContentHeight() : MIN_HEIGHT);
       const next = Math.min(maximum, Math.max(MIN_HEIGHT, contentHeight));
-      setHeight((current) => (Math.abs(current - next) > 1 ? next : current));
+      const heightChanged = Math.abs(heightRef.current - next) > 1;
+      if (heightChanged) heightRef.current = next;
+      if (heightChanged && hostRef.current) hostRef.current.style.height = `${next}px`;
+      if (applyingLayout) return;
+      applyingLayout = true;
+      try {
+        // Layout is still required when the cell is capped at 95vh: the outer
+        // height is unchanged, but Monaco's scrollable viewport gained a line.
+        instance.layout({ width: instance.getLayoutInfo().width, height: next });
+      } finally {
+        applyingLayout = false;
+      }
     };
+    instance.onKeyDown((event) => {
+      if (event.keyCode !== monaco.KeyCode.Enter
+        || event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return;
+      const editorNode = instance.getDomNode();
+      if (editorNode?.querySelector('.suggest-widget.visible')) return;
+      const model = instance.getModel();
+      const selections = instance.getSelections();
+      if (!model || !selections?.length) return;
+      const replacedLines = selections.reduce(
+        (total, selection) => total + selection.endLineNumber - selection.startLineNumber,
+        0,
+      );
+      const nextLineCount = Math.max(1, model.getLineCount() + selections.length - replacedLines);
+      resize(Math.max(instance.getContentHeight(), nextLineCount * 22 + 10));
+    });
     resize();
-    window.addEventListener('resize', resize);
+    const resizeForViewport = () => resize();
+    window.addEventListener('resize', resizeForViewport);
     instance.onDidDispose(() => {
-      window.removeEventListener('resize', resize);
+      window.removeEventListener('resize', resizeForViewport);
       window.clearTimeout(viewStateTimerRef.current);
       const storageKey = activeViewStateStorageKeyRef.current;
       if (storageKey) {
@@ -307,11 +372,19 @@ export function OctaveEditor({
         )]);
       },
     });
-    instance.onDidContentSizeChange(resize);
+    instance.onDidContentSizeChange((event) => resize(event.contentHeight));
     instance.onDidChangeCursorSelection(updateCommentContinuation);
     instance.onDidChangeModelContent(() => {
       updateCommentContinuation();
-      updateMarkers();
+      const model = instance.getModel();
+      // Content-size events can arrive a frame after Enter. Reserve the exact
+      // line-box height synchronously so the newly inserted line never clips.
+      if (model) {
+        resize(model.getLineCount() * 22 + 10);
+        const position = instance.getPosition();
+        if (position) instance.revealPosition(position, monaco.editor.ScrollType.Immediate);
+      }
+      scheduleLocalMarkers();
     });
     instance.onDidChangeModel(() => {
       bindInspector();
@@ -319,10 +392,9 @@ export function OctaveEditor({
       updateMarkers();
       resize();
     });
-  }, [bindInspector, updateMarkers]);
+  }, [bindInspector, scheduleLocalMarkers, updateMarkers]);
 
   useEffect(() => {
-    updateMarkers();
     const instance = editorRef.current;
     const monaco = monacoRef.current;
     const model = instance?.getModel();
@@ -368,7 +440,14 @@ export function OctaveEditor({
       instance.setScrollPosition(scrollPosition);
       if (hadTextFocus) instance.focus();
     }
-  }, [value, diagnostics, updateMarkers]);
+  }, [value]);
+
+  useEffect(() => {
+    const monaco = monacoRef.current;
+    const model = editorRef.current?.getModel();
+    if (!monaco || !model) return;
+    monaco.editor.setModelMarkers(model, 'octave-external', toMonacoMarkers(monaco, model, diagnostics));
+  }, [diagnostics]);
 
   useEffect(() => {
     let active = true;
@@ -379,18 +458,6 @@ export function OctaveEditor({
       active = false;
     };
   }, []);
-
-  useEffect(() => {
-    const instance = editorRef.current;
-    if (!instance) return;
-    const maximum = Math.max(MIN_HEIGHT, Math.floor(window.innerHeight * 0.95));
-    const model = instance.getModel();
-    const contentHeight = model
-      ? instance.getBottomForLineNumber(model.getLineCount()) + 5
-      : MIN_HEIGHT;
-    const next = Math.min(maximum, Math.max(MIN_HEIGHT, contentHeight));
-    setHeight((current) => Math.abs(current - next) > 1 ? next : current);
-  }, [runtimeReady, value]);
 
   useEffect(() => {
     const instance = editorRef.current;
@@ -428,14 +495,15 @@ export function OctaveEditor({
     return () => inspectorCleanupRef.current();
   }, [onInspect, bindInspector]);
 
+  const completionSourcesKey = JSON.stringify(completionSources);
   useEffect(() => {
     const model = editorRef.current?.getModel();
     completionCleanupRef.current();
     completionCleanupRef.current = model
-      ? bindOctaveCompletionSources(model, completionSources)
+      ? bindOctaveCompletionSources(model, completionSourcesRef.current)
       : () => undefined;
     return () => completionCleanupRef.current();
-  }, [completionSources]);
+  }, [completionSourcesKey]);
 
   useEffect(() => () => {
     const model = editorRef.current?.getModel();
@@ -443,6 +511,7 @@ export function OctaveEditor({
     inspectorCleanupRef.current();
     completionCleanupRef.current();
     multiCursorCleanupRef.current();
+    window.clearTimeout(lintTimerRef.current);
     if (model && monaco) {
       monaco.editor.setModelMarkers(model, 'octave-local', []);
       monaco.editor.setModelMarkers(model, 'octave-external', []);
@@ -452,9 +521,10 @@ export function OctaveEditor({
   if (!runtimeReady) return <div aria-hidden="true" style={{ height: MIN_HEIGHT }} />;
 
   return (
-    <Editor
+    <div ref={hostRef} className="octave-editor-host" style={{ height: heightRef.current }}>
+      <Editor
       key={EDITOR_MOUNT_REVISION}
-      height={height}
+      height="100%"
       language="octave"
       theme={theme}
       defaultValue={value}
@@ -495,7 +565,9 @@ export function OctaveEditor({
         scrollbar: { alwaysConsumeMouseWheel: false, verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
         scrollBeyondLastLine: false,
         smoothScrolling: true,
-        snippetSuggestions: 'top',
+        // Mix snippets into the ranked list so local variables/functions with
+        // sortText 00-03 stay ahead of generic language templates.
+        snippetSuggestions: 'inline',
         suggest: {
           localityBonus: true,
           preview: true,
@@ -511,7 +583,8 @@ export function OctaveEditor({
         unicodeHighlight: { invisibleCharacters: false },
         wordWrap: 'on',
       }}
-    />
+      />
+    </div>
   );
 }
 

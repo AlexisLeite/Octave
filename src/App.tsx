@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Braces, CircleHelp, FilePlus2, FolderPlus, Moon, Pencil, Play, Plus, Printer, RotateCcw, Save, Sun, Trash2, Type } from 'lucide-react'
-import { api } from './api'
+import { api, startRuntimeHeartbeat } from './api'
 import { Cell } from './components/Cell'
 import { FileTree, type CreatingNode } from './components/FileTree'
 import { HelpModal } from './components/HelpModal'
@@ -106,12 +106,11 @@ export default function App() {
   const activeCellIdRef = useRef<string | null>(null)
   const saveQueueRef = useRef<Promise<void>>(Promise.resolve())
   const pendingSaveCountRef = useRef(0)
+  const sourceRenderTimerRef = useRef(0)
   const breadcrumbFrame = useRef<number | null>(null)
   const restorationStarted = useRef(false)
   const restoredPath = useRef(localStorage.getItem('octave-active-path'))
-  documentRef.current = document
   activePathRef.current = activePath
-  dirtyRef.current = dirty
 
   const notebookHeadings = useMemo(
     () => extractNotebookHeadings(document?.cells ?? []),
@@ -199,18 +198,31 @@ export default function App() {
 
     const restore = () => {
       if (cancelled || notebookRef.current !== scroller) return
-      scroller.scrollTo({ top: view.scrollTop, left: view.scrollLeft, behavior: 'instant' })
       activeCellIdRef.current = view.activeCellId && document.cells.some((cell) => cell.id === view.activeCellId)
         ? view.activeCellId
         : null
+      const activeElement = globalThis.document.activeElement
+      if (activeCellIdRef.current) {
+        const cell = scroller.querySelector<HTMLElement>(`[data-cell-id="${CSS.escape(activeCellIdRef.current)}"]`)
+        const canRestoreFocus = !activeElement
+          || activeElement === globalThis.document.body
+          || Boolean(cell?.contains(activeElement))
+        const focusable = cell?.querySelector<HTMLElement>('textarea[aria-label="Octave code"], .ProseMirror[contenteditable="true"]')
+        if (canRestoreFocus) focusable?.focus({ preventScroll: true })
+      }
+      // Focusing restores the editor/cursor but must never override the saved
+      // notebook viewport. Reapply it in the same frame without animation.
+      scroller.scrollTo({ top: view.scrollTop, left: view.scrollLeft, behavior: 'instant' })
     }
 
     const frame = window.requestAnimationFrame(() => window.requestAnimationFrame(restore))
     const settleTimer = window.setTimeout(restore, 120)
+    const editorTimer = window.setTimeout(restore, 420)
     return () => {
       cancelled = true
       window.cancelAnimationFrame(frame)
       window.clearTimeout(settleTimer)
+      window.clearTimeout(editorTimer)
     }
   }, [document?.id])
 
@@ -272,6 +284,9 @@ export default function App() {
     const currentPath = activePathRef.current
     if (!currentDocument || !currentPath) return true
 
+    window.clearTimeout(sourceRenderTimerRef.current)
+    sourceRenderTimerRef.current = 0
+
     if (formatActiveCell && activeCellIdRef.current) {
       const cellId = activeCellIdRef.current
       const cell = currentDocument.cells.find((candidate) => candidate.id === cellId)
@@ -291,6 +306,9 @@ export default function App() {
     }
 
     if (!dirtyRef.current) return true
+    // Commit the latest uncontrolled Monaco draft before persistence. This does
+    // not replace the editor model because its value already matches the draft.
+    setDocument(currentDocument)
     const documentToSave = currentDocument
     pendingSaveCountRef.current += 1
     setSaving(true)
@@ -396,7 +414,12 @@ export default function App() {
     }
   }, [activePath, Boolean(document)])
 
+  useEffect(() => {
+    return startRuntimeHeartbeat()
+  }, [])
+
   useEffect(() => () => {
+    window.clearTimeout(sourceRenderTimerRef.current)
     runtimeGeneration.current += 1
     if (runtimeId.current) void api.runtime.close(runtimeId.current)
   }, [])
@@ -604,6 +627,7 @@ export default function App() {
     }
     documentRef.current = next
     setDocument(next)
+    dirtyRef.current = true
     setDirty(true)
   }
 
@@ -618,6 +642,7 @@ export default function App() {
     documentRef.current = nextDocument
     setDocument(nextDocument)
     setOutputs(nextDocument.outputs ?? {})
+    dirtyRef.current = true
     setDirty(true)
   }
 
@@ -626,9 +651,27 @@ export default function App() {
 
   function updateCell(id: string, changes: Partial<NotebookCell>) {
     const sourceOnly = Object.keys(changes).length === 1 && changes.source !== undefined
+    if (sourceOnly) {
+      const current = documentRef.current
+      if (!current) return
+      const next = {
+        ...current,
+        cells: current.cells.map((cell) => cell.id === id ? { ...cell, ...changes } : cell),
+      }
+      documentRef.current = next
+      dirtyRef.current = true
+      window.clearTimeout(sourceRenderTimerRef.current)
+      const documentId = next.id
+      sourceRenderTimerRef.current = window.setTimeout(() => {
+        if (documentRef.current?.id !== documentId) return
+        setDocument(documentRef.current)
+        setDirty(true)
+      }, 180)
+      return
+    }
     mutateDocument(
       (current) => ({ ...current, cells: current.cells.map((cell) => cell.id === id ? { ...cell, ...changes } : cell) }),
-      { record: !sourceOnly },
+      { record: true },
     )
   }
 
@@ -671,6 +714,21 @@ export default function App() {
       return { ...current, cells: current.cells.filter((cell) => cell.id !== id), outputs: nextOutputs }
     })
     setOutputs((current) => { const next = { ...current }; delete next[id]; return next })
+  }
+
+  function clearCellOutput(id: string) {
+    mutateDocument((current) => {
+      if (!current.outputs?.[id]) return current
+      const nextOutputs = { ...current.outputs }
+      delete nextOutputs[id]
+      return { ...current, outputs: nextOutputs }
+    }, { record: false })
+    setOutputs((current) => {
+      if (!current[id]) return current
+      const next = { ...current }
+      delete next[id]
+      return next
+    })
   }
 
   function reorderCell(sourceId: string, targetId: string, edge: 'before' | 'after') {
@@ -815,6 +873,7 @@ export default function App() {
     documentRef.current = nextDocument
     historyRef.current = createNotebookHistory(nextDocument)
     setDocument(nextDocument)
+    dirtyRef.current = true
     setDirty(true)
     void launchRuntime(document.id, generation).catch((error) => {
       if (error instanceof Error && error.message === 'STALE_RUNTIME') return
@@ -947,10 +1006,17 @@ export default function App() {
                   output={outputs[cell.id]}
                   running={running.has(cell.id)}
                   onChange={(source) => updateCell(cell.id, { source })}
-                  onRun={() => runCell(cell)}
+                  onRun={() => {
+                    const latest = documentRef.current?.cells.find((candidate) => candidate.id === cell.id)
+                    if (latest) void runCell(latest)
+                  }}
                   onFormat={() => formatCell(cell.id)}
                   onDelete={() => removeCell(cell.id)}
-                  onCopyContext={() => void copyCellContext(cell, index, outputs[cell.id], running.has(cell.id))}
+                  onClearOutput={() => clearCellOutput(cell.id)}
+                  onCopyContext={() => {
+                    const latest = documentRef.current?.cells.find((candidate) => candidate.id === cell.id) ?? cell
+                    void copyCellContext(latest, index, outputs[cell.id], running.has(cell.id))
+                  }}
                   onKindChange={(kind) => updateCell(cell.id, { kind })}
                   onInspect={inspect}
                   completionSources={document.cells

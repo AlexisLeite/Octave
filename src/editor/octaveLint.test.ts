@@ -41,6 +41,28 @@ describe('lintOctave', () => {
     expect(lintOctave(source)).toEqual([]);
   });
 
+  it('recognizes conjugate and dot transpose without treating them as strings', () => {
+    expect(lintOctave([
+      "lineal = (1:6).';",
+      "conjugada = A';",
+      "separada = A ';",
+      "assert(isequal(lineal, (1:6).'));",
+    ].join('\n'))).toEqual([]);
+  });
+
+  it('accepts a compact if/else/endif nested in a while loop', () => {
+    const source = [
+      'while (b - a) > tolerancia && iter < 100',
+      '  medio = (a + b) / 2;',
+      '  if f(a) * f(medio) <= 0, b = medio; else, a = medio; endif',
+      '  iter += 1;',
+      'endwhile',
+      'raiz = (a + b) / 2;',
+    ].join('\n');
+
+    expect(lintOctave(source)).toEqual([]);
+  });
+
   it('ignores trailing whitespace', () => {
     expect(lintOctave('x = 1;   \n')).toEqual([]);
   });

@@ -87,6 +87,109 @@ protegido = !isempty(vacio) && vacio(1) > 0;
 alternativa = isempty(vacio) || vacio(1) > 0;
 assert(!protegido && alternativa);`, 'Decisiones escalares protegidas'),
       ], [], ['&', '|', '!', '~', '&&', '||', 'cortocircuito', '!=', '~=', 'all', 'any']),
+
+      topic('operadores-asignacion', 'Asignación, formas compuestas e incremento', [
+        markdown(`= asigna el valor de la derecha al destino de la izquierda: nombre, elemento indexado, campo o contenido de celda. No es una comparación; para comparar usa ==. La asignación puede encadenarse, pero una línea por nombre suele ser más clara.
+
+Octave admite estas formas compuestas: +=, -=, *=, /=, \\=, ^=, .*=, ./=, .\\=, .^=, &= y |=. x op= y significa x = x op y evaluando el destino una sola vez. Son prácticas en acumuladores, pero varias no son compatibles con MATLAB.`),
+        code(`clear;
+total = 10;
+total += 5;
+total -= 3;
+total *= 2;
+total /= 4;
+assert(total == 6);
+
+v = [1, 2, 3];
+v .*= 2;
+v .^= 2;
+assert(isequal(v, [4, 16, 36]));`, 'Asignaciones compuestas'),
+        markdown(`++ incrementa uno y -- decrementa uno. En forma prefija, nuevo=++x modifica x y devuelve el valor nuevo; en forma postfija, anterior=x++ devuelve el valor anterior y después modifica x. Evita esconderlos dentro de expresiones largas. Para código compatible con MATLAB, escribe x=x+1.
+
+Error frecuente: escribir if x=3, que asigna en vez de comparar y normalmente produce un error de sintaxis o una decisión equivocada en otros lenguajes. Otro error es usar *= cuando se pretendía .*= sobre una matriz. **Criterio:** formas compuestas para una actualización obvia; asignación explícita cuando ayuda a ver la operación o la portabilidad. **Ejercicio:** implementa el mismo contador con +=, ++ y la forma portable.`),
+        code(`clear;
+k = 5;
+anterior = k++;
+nuevo = ++k;
+assert(anterior == 5);
+assert(nuevo == 7 && k == 7);
+
+bandera = true;
+bandera &= (k > 0);
+otra = false;
+otra |= (k == 7);
+assert(bandera && otra);`, 'Prefijo, postfijo y actualización lógica'),
+      ], [], ['=', '+=', '-=', '*=', '/=', '\\=', '^=', '.*=', './=', '.\\=', '.^=', '&=', '|=', '++', '--', 'asignación']),
+
+      topic('operadores-rango-transpuesta', 'Dos puntos, end y transposición', [
+        markdown(`inicio:fin e inicio:paso:fin crean rangos. Dentro de índices, : selecciona toda una dimensión y end representa su última posición válida. A(:) reúne todos los elementos como columna en orden lineal; no es lo mismo que crear un rango de valores.
+
+El extremo de un rango aparece solo si coincide con la progresión. Un paso positivo con inicio mayor que fin, o negativo en la dirección contraria, produce vacío. linspace(a,b,n) es preferible cuando importa la cantidad exacta de muestras.`),
+        code(`clear;
+ascenso = 2:5;
+pares = 2:2:10;
+descenso = 5:-2:1;
+vacio = 5:1;
+assert(isequal(ascenso, [2, 3, 4, 5]));
+assert(isequal(pares, [2, 4, 6, 8, 10]));
+assert(isequal(descenso, [5, 3, 1]) && isempty(vacio));
+
+A = reshape(1:6, 2, 3);
+assert(isequal(A(:, end), [5; 6]));`, 'Crear y seleccionar con dos puntos'),
+        markdown(`' es transposición conjugada: intercambia filas y columnas y conjuga complejos. .' es transposición simple y no conjuga. En datos reales dan el mismo resultado, por eso el error suele permanecer oculto hasta usar complejos. Ambos son operadores postfijos.
+
+**Criterio:** usa ' cuando el concepto es adjunto/producto interno y .' cuando solo reorganizas orientación. Error frecuente: insertar ' para “arreglar dimensiones” sin decidir si debía conjugar. **Ejercicio:** demuestra con un vector complejo que v'*v es real no negativo y compáralo con v.'*v.`),
+        code(`clear;
+v = [1 + 2i, 3 - 4i];
+adjunta = v';
+simple = v.';
+assert(adjunta(1) == 1 - 2i);
+assert(simple(1) == 1 + 2i);
+
+energia = v * v';
+sin_conjugar = v * v.';
+assert(isreal(energia) && energia >= 0);
+assert(energia != sin_conjugar);`, 'Conjugar o solo cambiar orientación'),
+      ], [], [':', 'colon', 'rango', 'end', "'", ".'", 'transpuesta', 'conjugada']),
+
+      topic('operadores-precedencia', 'Precedencia y asociatividad sin sorpresas', [
+        markdown(`Cuando faltan paréntesis, Octave usa este orden práctico, de mayor a menor:
+
+1. llamadas, indexación, llaves y acceso a campos;
+2. incremento/decremento postfijo;
+3. transposición y potencias;
+4. + y - unarios, !/~, incremento/decremento prefijo;
+5. productos y divisiones: *, /, \\, .*, ./, .\\;
+6. suma y resta;
+7. rango :;
+8. relaciones: <, <=, ==, >=, >, !=/~=;
+9. &: luego |; después && y finalmente ||;
+10. asignación simple o compuesta.
+
+Los paréntesis de una llamada o índice no son el mismo operador que los usados para agrupar, pero ambos hacen visible la estructura.`),
+        code(`clear;
+a = 2; b = 3; c = 4;
+implicita = a + b * c;
+explicita = a + (b * c);
+otra = (a + b) * c;
+assert(implicita == 14 && explicita == 14 && otra == 20);
+
+negada = -2^2;
+assert(negada == -(2^2) && negada == -4);`, 'Producto y potencia preceden a suma y signo'),
+        markdown(`Operadores del mismo nivel suelen asociar a la izquierda, pero encadenar potencias es una trampa de portabilidad: Octave evalúa 2^3^2 como (2^3)^2. Escribe siempre (2^3)^2 o 2^(3^2) según la intención. Las comparaciones encadenadas tampoco expresan intervalos: usa dos comparaciones unidas por & o &&.
+
+Error frecuente: creer que 1:2+5 significa (1:2)+5; la suma tiene mayor precedencia y resulta 1:(2+5). **Criterio:** parentetiza al mezclar familias, aunque conozcas la tabla. **Ejercicio:** agrega paréntesis a valido = a>0 & b<1 || c==2 para expresar dos interpretaciones diferentes y crea datos que las distingan.`),
+        code(`clear;
+rango_implicito = 1:2+5;
+rango_explicito = 1:(2+5);
+assert(isequal(rango_implicito, rango_explicito));
+
+izquierda = 2^3^2;
+primero_izquierda = (2^3)^2;
+primero_derecha = 2^(3^2);
+assert(izquierda == primero_izquierda);
+assert(izquierda == 64 && primero_derecha == 512);`, 'Rango y potencias encadenadas'),
+      ], [], ['precedencia', 'asociatividad', 'paréntesis', 'orden de evaluación']),
     ],
     ['operadores', 'aritmética', 'lógica', 'comparación', 'precedencia'],
   ),

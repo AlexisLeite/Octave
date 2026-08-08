@@ -76,7 +76,7 @@
     {
       "id": "d7d386d9-a4e9-40b1-81af-cdaa562fb319",
       "kind": "code",
-      "source": "function m = maximo(a, b)\r\n  \r\nend"
+      "source": "function m = maximo(A)\r\n  m = max(max(A));\r\nend\r\n\r\nA = reshape(1:9, 3, 3)';\r\n\r\nheading(\"Maximo 1\", maximo(A))\r\n\r\n% Si bien la solución es conceptualmente correcta, el ejercicio habla de usar for, así que a continuación va otra versión.\r\n\r\nfunction m = maximo2(A)\r\n  m = 0;\r\n  for col = A\r\n    for c = col'\r\n      if c > m\r\n        m = c;\r\n      end\r\n    end\r\n  end\r\nend\r\n\r\nheading(\"Maximo 2\", maximo2(A))"
     },
     {
       "id": "09cd67c0-cdb6-4ca0-a2fe-ccbc1e92f21a",
@@ -84,19 +84,59 @@
       "source": "\r\n\r\n**b)** Escribir una función `serie` que reciba una función $f$ y un natural $N$, y devuelva la suma parcial\r\n\r\n\r\n\r\n$$\r\n\r\n\\sum_{n=0}^{N} f(n).\r\n\r\n$$"
     },
     {
+      "id": "52277e87-a9e3-46b5-b9b8-107ee88b945c",
+      "kind": "code",
+      "source": "myFun = @(x) 2 * x;\r\n\r\nfunction r = serie(fn, N)\r\n  r=0;\r\n  for i=1:N\r\n    r+=fn(i);\r\n  end\r\nend\r\n\r\nheading(\"Serie\", serie(myFun, 4))"
+    },
+    {
       "id": "709df531-65a3-4868-8ef5-74492b04ec88",
       "kind": "markdown",
       "source": "## Ejercicio 4 (While)\n\nEscribir una función `serie2` que reciba una función decreciente $f$ y un real positivo $\\varepsilon$, y devuelva la suma parcial\n\n$$\n\\sum_{n=0}^{N} f(n),\n$$\n\ndonde $N$ es el primer natural tal que $f(N) < \\varepsilon$."
     },
     {
+      "id": "bff0d48e-bc6f-40eb-9d4c-fa01c2478919",
+      "kind": "code",
+      "source": "funDecreciente = @(x) 1 / (1+x);\r\n\r\nfunction r = serie2(fn, e)\r\n  r = 0;\r\n  i = 0;\r\n  do\r\n    v = fn(i++)\r\n    if(v >= e)\r\n      r += v;\r\n    end\r\n  until(v < e);\r\nend\r\n\r\nheading(\"Serie decreciente\", serie2(funDecreciente, 0.1))"
+    },
+    {
       "id": "cb9a58f3-9967-4f96-b963-2da270581e74",
       "kind": "markdown",
-      "source": "## Ejercicio 5 (Fibonacci)\n\nLa sucesión de Fibonacci se define de la siguiente forma:\n\n$$\nf_0 = 1, \\qquad f_1 = 1,\n$$\n\ny\n\n$$\nf_{n+1} = f_n + f_{n-1} \\qquad \\forall n \\ge 1.\n$$\n\n**a)** Escribir una función `fibonacci` que reciba un número natural $n$ y devuelva un vector conteniendo los primeros $n+1$ números de la sucesión de Fibonacci.\n\n**b)** Demostrar que, cuando $n \\to \\infty$,\n\n$$\n\\frac{f_n}{f_{n+1}} \\to \\varphi = \\frac{1 + \\sqrt{5}}{2},\n$$\n\nel llamado **número áureo**.\n\nUsar la función `fibonacci` para calcular, en forma vectorizada, los cocientes\n\n$$\n\\frac{f_0}{f_1}, \\ldots, \\frac{f_{19}}{f_{20}}.\n$$"
+      "source": "## Ejercicio 5 (Fibonacci)\n\nLa sucesión de Fibonacci se define de la siguiente forma:\n\n$$\nf_0 = 1, \\qquad f_1 = 1,\n$$\n\ny\n\n$$\nf_{n+1} = f_n + f_{n-1} \\qquad \\forall n \\ge 1.\n$$\n\n**a)** Escribir una función `fibonacci` que reciba un número natural $n$ y devuelva un vector conteniendo los primeros $n+1$ números de la sucesión de Fibonacci."
+    },
+    {
+      "id": "3b85548d-537a-4bde-84c3-588abbd57bc9",
+      "kind": "code",
+      "source": "function v = fibonacci(n)\r\n  v = [1, 1];\r\n\r\n  for i = 3:n+1\r\n    v(i) = v(i-2) + v(i-1);\r\n  end\r\nend\r\n\r\ndisp(fibonacci(10))"
+    },
+    {
+      "id": "fbf1fd80-509c-4a0b-a973-695e8d787da2",
+      "kind": "markdown",
+      "source": "\r\n**b)** Demostrar que, cuando $n \\to \\infty$,\r\n\r\n$$\r\n\\frac{f_n}{f_{n+1}} \\to \\varphi = \\frac{1 + \\sqrt{5}}{2},\r\n$$\r\n\r\nel llamado **número áureo**.\r\n\r\nUsar la función `fibonacci` para calcular, en forma vectorizada, los cocientes\r\n\r\n$$\r\n\\frac{f_0}{f_1}, \\ldots, \\frac{f_{19}}{f_{20}}.\r\n$$"
+    },
+    {
+      "id": "392b5c8d-bf6f-4c15-bd34-0be596d6b732",
+      "kind": "code",
+      "source": "v = fibonacci(30);\r\n\r\nfunction r = demo(v)\r\n  r = [];\r\n  for i = 2:size(v)(2)\r\n    r(i-1) = v(i) / v(i-1);\r\n  end\r\nend\r\n\r\nheading(\"Calculado\");\r\nfprintf('%.6f  ', demo(v));\r\n\r\nheading(\"\\nEuler\", phi = (1 + sqrt(5)) / 2);"
     },
     {
       "id": "289d4202-31d3-4572-a35c-1c00cab45e5d",
       "kind": "markdown",
-      "source": "## Ejercicio 6 (Collatz)\n\nLa conjetura de Collatz es uno de los problemas sin resolver más famosos en matemática, y consiste en preguntarse si la repetición de dos operaciones aritméticas simples eventualmente transforma cualquier número natural en $1$.\n\nSe considera la función $f : \\mathbb{N} \\to \\mathbb{N}$,\n\n$$\nf(m) =\n\\begin{cases}\n\\dfrac{m}{2}, & \\text{si } m \\text{ es par}, \\\\\n3m + 1, & \\text{si } m \\text{ es impar},\n\\end{cases}\n$$\n\ny se define una sucesión mediante\n\n$$\na_0 = m\n$$\n\n(con $m$ un número a elegir, al que llamaremos **semilla**) y\n\n$$\na_{n+1} = f(a_n) \\qquad \\forall n \\ge 0.\n$$\n\n**a)** Notar que si se toma la semilla $m = 1$, se obtiene el ciclo\n\n$$\n1 \\mapsto 4 \\mapsto 2 \\mapsto 1 \\mapsto \\cdots\n$$\n\n**b)** Escribir una función `collatz` que reciba un número natural $m$ y devuelva un vector conteniendo los elementos de la sucesión $\\{a_n\\}$ obtenida al usar $m$ como semilla hasta que se llegue al valor $1$.\n\nPara evitar que el programa corra indefinidamente, establecer una cota superior a la cantidad de veces que se puede aplicar $f$.\n\n**c)** Mostrar que usando como semilla cualquier valor de $m$ menor que $1000$ se llega al $1$ en menos de $200$ pasos.\n\n¿Para qué valor $m < 1000$ de semilla es para el que se tiene mayor cantidad de pasos antes de llegar al $1$?"
+      "source": "## Ejercicio 6 (Collatz)\n\nLa conjetura de Collatz es uno de los problemas sin resolver más famosos en matemática, y consiste en preguntarse si la repetición de dos operaciones aritméticas simples eventualmente transforma cualquier número natural en $1$.\n\nSe considera la función $f : \\mathbb{N} \\to \\mathbb{N}$,\n\n$$\nf(m) =\n\\begin{cases}\n\\dfrac{m}{2}, & \\text{si } m \\text{ es par}, \\\\\n3m + 1, & \\text{si } m \\text{ es impar},\n\\end{cases}\n$$\n\ny se define una sucesión mediante\n\n$$\na_0 = m\n$$\n\n(con $m$ un número a elegir, al que llamaremos **semilla**) y\n\n$$\na_{n+1} = f(a_n) \\qquad \\forall n \\ge 0.\n$$\n\n**a)** Notar que si se toma la semilla $m = 1$, se obtiene el ciclo\n\n$$\n1 \\mapsto 4 \\mapsto 2 \\mapsto 1 \\mapsto \\cdots\n$$"
+    },
+    {
+      "id": "e0fd96a0-06f2-432c-9ee3-1242534b52a7",
+      "kind": "code",
+      "source": ""
+    },
+    {
+      "id": "a5a0f5ce-98bf-4998-8544-40567c370cb7",
+      "kind": "markdown",
+      "source": "**b)** Escribir una función `collatz` que reciba un número natural $m$ y devuelva un vector conteniendo los elementos de la sucesión $\\{a_n\\}$ obtenida al usar $m$ como semilla hasta que se llegue al valor $1$.\n\nPara evitar que el programa corra indefinidamente, establecer una cota superior a la cantidad de veces que se puede aplicar $f$."
+    },
+    {
+      "id": "5b19f739-373d-48a8-978f-57856241f9e0",
+      "kind": "markdown",
+      "source": "**c)** Mostrar que usando como semilla cualquier valor de $m$ menor que $1000$ se llega al $1$ en menos de $200$ pasos.\n\n¿Para qué valor $m < 1000$ de semilla es para el que se tiene mayor cantidad de pasos antes de llegar al $1$?"
     },
     {
       "id": "74c9b877-c099-4a99-948b-328e63563f52",
@@ -122,41 +162,41 @@
   "outputs": {
     "dd33a0ad-d137-496a-963d-d803a8bb1753": {
       "cellId": "dd33a0ad-d137-496a-963d-d803a8bb1753",
-      "stdout": "V\n    1    2    3    4    5    6    7    8    9   10   11   12   13   14   15\n\nNorma\n35.214\n\nNorma casera\nans = 35.214",
+      "stdout": "V\n      1    2    3    4    5    6    7    8    9   10   11   12   13   14   15\n\nNorma\n  35.214\n\nNorma casera\nans = 35.214",
       "stderr": "",
-      "durationMs": 46.0348000000231,
+      "durationMs": 49.42809999999008,
       "error": null,
       "source": "function norma = norma(v) \r\n  norma = sqrt(sum(v.^2));\r\nend\r\n\r\nv = 1:15;\r\nheading(\"V\", v)\r\nheading(\"Norma\", norma(v))\r\n\r\n% La anterior es la solución correcta para la función norma, sin embargo para fines ilustrativos, podemos construirla paso a paso usando un for sobre el vector.\r\n\r\nfunction norma_casera = norma_casera(v)\r\n  norma = 0;\r\n  for x = v\r\n    norma = norma + x^2;\r\n  end\r\n  norma_casera = sqrt(norma);\r\nend\r\n\r\ndisp(\"\\nNorma casera\")\r\nnorma_casera(v)"
     },
     "4ca98bec-5c8f-4ebb-9117-83c6f06a64ee": {
       "cellId": "4ca98bec-5c8f-4ebb-9117-83c6f06a64ee",
-      "stdout": "A\n   1   2   3\n   4   5   6\n   7   8   9\n\nIntercambio(A, 1, 2)\n   4   5   6\n   1   2   3\n   7   8   9",
+      "stdout": "A\n     1   2   3\n     4   5   6\n     7   8   9\n\nIntercambio(A, 1, 2)\n     4   5   6\n     1   2   3\n     7   8   9",
       "stderr": "",
-      "durationMs": 41.017500000074506,
+      "durationMs": 58.561799999995856,
       "error": null,
       "source": "A = reshape(1:9, 3, 3)';\r\n\r\nfunction intercambio = intercambio(A, n, m)\r\n  N = A(n, :);\r\n  A(n, :) = A(m, :);\r\n  A(m, :) = N;\r\n  intercambio = A;\r\nend\r\n\r\nheading(\"A\", A);\r\nheading(\"Intercambio(A, 1, 2)\", intercambio(A, 1, 2));"
     },
     "14fee94a-3cf2-468e-8066-e02405acd702": {
       "cellId": "14fee94a-3cf2-468e-8066-e02405acd702",
-      "stdout": "A\n   1   4   7\n   2   5   8\n   3   6   9\n\nV\n   15   16   17\n\nSustitución\n    1    4    7\n   15   16   17\n    3    6    9\n\nSustitución casera\n    1    4    7\n   15   16   17\n    3    6    9",
+      "stdout": "A\n     1   4   7\n     2   5   8\n     3   6   9\n\nV\n     15   16   17\n\nSustitución\n      1    4    7\n     15   16   17\n      3    6    9\n\nSustitución casera\n      1    4    7\n     15   16   17\n      3    6    9",
       "stderr": "",
-      "durationMs": 41.48539999965578,
+      "durationMs": 66.15469999999914,
       "error": null,
       "source": "A = reshape(1:9, 3, 3);\r\nheading(\"A\", A)\r\n\r\nfunction AA = sustitucion(A, v, n)\r\n  AA = A;\r\n  AA(n,:) = v;\r\nend\r\n\r\nV = 15:17;\r\nheading(\"V\", V)\r\n\r\nAA = sustitucion(A, V, 2);\r\nheading(\"Sustitución\", AA);\r\n\r\n% Nuevamente, la solución anterior es correcta, pero para aprender el lenguaje puedo construir otra que sea iterativa elemento a elemento\r\n\r\nfunction AA = sustitucion_casera(A, v, n)\r\n  ancho = size(A, 1);\r\n  AA = A;\r\n\r\n  for i=1:ancho\r\n    AA(n, i) = v(i);\r\n  end\r\nend\r\n\r\nheading(\"Sustitución casera\", sustitucion_casera(A, V, 2));"
     },
     "27738fca-bc12-4c20-9312-1d300ab50cc5": {
       "cellId": "27738fca-bc12-4c20-9312-1d300ab50cc5",
-      "stdout": "Máximo\n2\n\nMáximo clásico\n5",
+      "stdout": "Máximo\n  2\n\nMáximo clásico\n  5",
       "stderr": "",
-      "durationMs": 39.420299999881536,
+      "durationMs": 73.52949999998964,
       "error": null,
       "source": "function m = maximo(a, b)\r\n  m = ifelse(a > b, a, b);\r\nend\r\n\r\nheading(\"Máximo\", maximo(1, 2))\r\n\r\n# Además de la construcción ifelse del lenguaje, podemos usar if clásicos\r\n\r\nfunction m = maximo_clasico(a, b)\r\n  if a > b\r\n    m = a;\r\n  else\r\n    m = b;\r\n  end\r\nend\r\n\r\nheading(\"Máximo clásico\", maximo_clasico(3, 5))"
     },
     "e1b22035-b37f-457c-95ec-eb9ec391ee3e": {
       "cellId": "e1b22035-b37f-457c-95ec-eb9ec391ee3e",
-      "stdout": "Valor: -100\n-1\n\nValor: 0\n0\n\nValor: 100\n1",
+      "stdout": "Valor: -100\n  -1\n\nValor: 0\n  0\n\nValor: 100\n  1",
       "stderr": "",
-      "durationMs": 45.68500000005588,
+      "durationMs": 62.82190000000992,
       "error": null,
       "source": "function s = signo(x)\r\n  if x == 0\r\n    s = 0;\r\n  elseif x > 0\r\n    s = 1;\r\n  else\r\n    s = -1;\r\n  end\r\nend\r\n\r\nheading(\"Valor: -100\", signo(-1))\r\nheading(\"Valor: 0\", signo(0))\r\nheading(\"Valor: 100\", signo(1))"
     },
@@ -164,9 +204,49 @@
       "cellId": "ca7bf199-0746-40a0-898a-231a26a41406",
       "stdout": "Es par: 1\n  0\n\nEs par: 2\n  1",
       "stderr": "",
-      "durationMs": 52.30319999996573,
+      "durationMs": 46.15790000000561,
       "error": null,
       "source": "function i = esPar(n)\r\n  i = ifelse(mod(n, 2) == 0, 1, 0);\r\nend\r\n\r\nheading(\"Es par: 1\", esPar(1))\r\nheading(\"Es par: 2\", esPar(2))"
+    },
+    "d7d386d9-a4e9-40b1-81af-cdaa562fb319": {
+      "cellId": "d7d386d9-a4e9-40b1-81af-cdaa562fb319",
+      "stdout": "Maximo 1\n  9\n\nMaximo 2\n  9",
+      "stderr": "",
+      "durationMs": 45.824399999997695,
+      "error": null,
+      "source": "function m = maximo(A)\r\n  m = max(max(A));\r\nend\r\n\r\nA = reshape(1:9, 3, 3)';\r\n\r\nheading(\"Maximo 1\", maximo(A))\r\n\r\n% Si bien la solución es conceptualmente correcta, el ejercicio habla de usar for, así que a continuación va otra versión.\r\n\r\nfunction m = maximo2(A)\r\n  m = 0;\r\n  for col = A\r\n    for c = col'\r\n      if c > m\r\n        m = c;\r\n      end\r\n    end\r\n  end\r\nend\r\n\r\nheading(\"Maximo 2\", maximo2(A))"
+    },
+    "52277e87-a9e3-46b5-b9b8-107ee88b945c": {
+      "cellId": "52277e87-a9e3-46b5-b9b8-107ee88b945c",
+      "stdout": "Serie\n  20",
+      "stderr": "",
+      "durationMs": 46.1759999999922,
+      "error": null,
+      "source": "myFun = @(x) 2 * x;\r\n\r\nfunction r = serie(fn, N)\r\n  r=0;\r\n  for i=1:N\r\n    r+=fn(i);\r\n  end\r\nend\r\n\r\nheading(\"Serie\", serie(myFun, 4))"
+    },
+    "bff0d48e-bc6f-40eb-9d4c-fa01c2478919": {
+      "cellId": "bff0d48e-bc6f-40eb-9d4c-fa01c2478919",
+      "stdout": "v = 1\nv = 0.5000\nv = 0.3333\nv = 0.2500\nv = 0.2000\nv = 0.1667\nv = 0.1429\nv = 0.1250\nv = 0.1111\nv = 0.1000\nv = 0.090909\n\nSerie decreciente\n  2.9290",
+      "stderr": "",
+      "durationMs": 46.58629999999539,
+      "error": null,
+      "source": "funDecreciente = @(x) 1 / (1+x);\r\n\r\nfunction r = serie2(fn, e)\r\n  r = 0;\r\n  i = 0;\r\n  do\r\n    v = fn(i++)\r\n    if(v >= e)\r\n      r += v;\r\n    end\r\n  until(v < e);\r\nend\r\n\r\nheading(\"Serie decreciente\", serie2(funDecreciente, 0.1))"
+    },
+    "3b85548d-537a-4bde-84c3-588abbd57bc9": {
+      "cellId": "3b85548d-537a-4bde-84c3-588abbd57bc9",
+      "stdout": "    1    1    2    3    5    8   13   21   34   55   89",
+      "stderr": "",
+      "durationMs": 52.688800000119954,
+      "error": null,
+      "source": "function v = fibonacci(n)\r\n  v = [1, 1];\r\n\r\n  for i = 3:n+1\r\n    v(i) = v(i-2) + v(i-1);\r\n  end\r\nend\r\n\r\ndisp(fibonacci(10))"
+    },
+    "392b5c8d-bf6f-4c15-bd34-0be596d6b732": {
+      "cellId": "392b5c8d-bf6f-4c15-bd34-0be596d6b732",
+      "stdout": "Calculado\n1.000000  2.000000  1.500000  1.666667  1.600000  1.625000  1.615385  1.619048  1.617647  1.618182  1.617978  1.618056  1.618026  1.618037  1.618033  1.618034  1.618034  1.618034  1.618034  1.618034  1.618034  1.618034  1.618034  1.618034  1.618034  1.618034  1.618034  1.618034  1.618034  1.618034  \n\nEuler\n  1.6180",
+      "stderr": "",
+      "durationMs": 51.34750000014901,
+      "error": null,
+      "source": "v = fibonacci(30);\r\n\r\nfunction r = demo(v)\r\n  r = [];\r\n  for i = 2:size(v)(2)\r\n    r(i-1) = v(i) / v(i-1);\r\n  end\r\nend\r\n\r\nheading(\"Calculado\");\r\nfprintf('%.6f  ', demo(v));\r\n\r\nheading(\"\\nEuler\", phi = (1 + sqrt(5)) / 2);"
     }
   }
 }

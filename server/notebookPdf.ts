@@ -36,11 +36,52 @@ interface FlowOptions {
   lineGap?: number
 }
 
+export type PdfCodeTokenKind = 'plain' | 'keyword' | 'builtin' | 'constant' | 'number' | 'string' | 'comment' | 'operator'
+
+export interface PdfCodeToken {
+  text: string
+  kind: PdfCodeTokenKind
+}
+
 const PAGE_MARGIN = 72
 const PAGE_WIDTH = 595.28
 const CONTENT_WIDTH = PAGE_WIDTH - PAGE_MARGIN * 2
 const BODY_SIZE = 10.5
 const BODY_LINE_GAP = 4
+
+const OCTAVE_KEYWORDS = new Set([
+  'break', 'case', 'catch', 'classdef', 'continue', 'do', 'else', 'elseif', 'end',
+  'end_try_catch', 'end_unwind_protect', 'endclassdef', 'endenumeration', 'endevents',
+  'endfor', 'endfunction', 'endif', 'endmethods', 'endparfor', 'endproperties',
+  'endswitch', 'endwhile', 'enumeration', 'events', 'for', 'function', 'get', 'global',
+  'if', 'methods', 'otherwise', 'parfor', 'persistent', 'properties', 'return', 'set',
+  'static', 'switch', 'try', 'until', 'unwind_protect', 'unwind_protect_cleanup', 'while',
+])
+
+const OCTAVE_BUILTINS = new Set([
+  'abs', 'all', 'any', 'assert', 'class', 'clear', 'close', 'columns', 'cos', 'det',
+  'diag', 'disp', 'eig', 'error', 'exist', 'exp', 'eye', 'find', 'fprintf', 'help',
+  'hist', 'inv', 'isempty', 'isequal', 'isfinite', 'isinf', 'isnan', 'length', 'linspace',
+  'log', 'max', 'mean', 'min', 'mod', 'ndims', 'nnz', 'norm', 'numel', 'ones', 'plot',
+  'printf', 'prod', 'rand', 'randn', 'rank', 'reshape', 'rows', 'sin', 'size', 'sort',
+  'sprintf', 'sqrt', 'std', 'sum', 'svd', 'warning', 'whos', 'zeros',
+])
+
+const OCTAVE_CONSTANTS = new Set([
+  'e', 'eps', 'false', 'flintmax', 'i', 'Inf', 'intmax', 'intmin', 'j', 'NaN',
+  'pi', 'realmax', 'realmin', 'true',
+])
+
+const CODE_STYLE: Record<PdfCodeTokenKind, { color: string; font: string }> = {
+  plain: { color: '#17202a', font: 'Courier' },
+  keyword: { color: '#7e22ce', font: 'Courier-Bold' },
+  builtin: { color: '#007c73', font: 'Courier' },
+  constant: { color: '#a5144e', font: 'Courier-Bold' },
+  number: { color: '#a84400', font: 'Courier' },
+  string: { color: '#357a20', font: 'Courier' },
+  comment: { color: '#56665e', font: 'Courier-Oblique' },
+  operator: { color: '#006f9a', font: 'Courier' },
+}
 
 const mathAdaptor = liteAdaptor()
 RegisterHTMLHandler(mathAdaptor)

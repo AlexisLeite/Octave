@@ -6,8 +6,10 @@
   "scripts": {
     "dev": ".\\.upm\\bin\\cm.cmd run --id octave-notebook-dev --cwd . -- pnpm dev:raw",
     "dev:raw": "concurrently -k -n api,ui -c cyan,magenta \"pnpm dev:api\" \"pnpm dev:ui\"",
-    "dev:api": "tsx watch server/index.ts",
+    "dev:api": "tsx watch scripts/dev-api.mjs",
     "dev:ui": "vite",
+    "serve": "pnpm build && pnpm serve:dist",
+    "serve:dist": "tsx scripts/serve.mjs",
     "build": "tsc -b && vite build",
     "package": "pnpm build && node scripts/package.mjs",
     "test:package": "node scripts/test-package.mjs",

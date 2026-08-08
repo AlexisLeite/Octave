@@ -126,7 +126,7 @@ export function octaveCommentPrefixAt(line: string, column: number): string | un
   return `${comment[2]} `;
 }
 
-const languageConfiguration: languages.LanguageConfiguration = {
+export const octaveLanguageConfiguration: languages.LanguageConfiguration = {
   comments: {
     lineComment: '%',
     blockComment: ['%{', '%}'],
@@ -140,14 +140,12 @@ const languageConfiguration: languages.LanguageConfiguration = {
     { open: '{', close: '}' },
     { open: '[', close: ']' },
     { open: '(', close: ')' },
-    { open: "'", close: "'", notIn: ['string', 'comment'] },
     { open: '"', close: '"', notIn: ['string', 'comment'] },
   ],
   surroundingPairs: [
     { open: '{', close: '}' },
     { open: '[', close: ']' },
     { open: '(', close: ')' },
-    { open: "'", close: "'" },
     { open: '"', close: '"' },
   ],
   folding: {
@@ -504,7 +502,7 @@ export function registerOctaveLanguage(monaco: Monaco): void {
         mimetypes: ['text/x-octave'],
       });
     }
-    monaco.languages.setLanguageConfiguration('octave', languageConfiguration);
+  monaco.languages.setLanguageConfiguration('octave', octaveLanguageConfiguration);
     monaco.languages.setMonarchTokensProvider('octave', monarchLanguage);
   }
   monaco.editor.defineTheme('octave-light', {

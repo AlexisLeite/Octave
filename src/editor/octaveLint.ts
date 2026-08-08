@@ -55,6 +55,7 @@ const closerToOpener = Object.fromEntries(
 function withoutStringsAndComments(line: string, inBlockComment: boolean): [string, boolean] {
   let result = '';
   let quote: "'" | '"' | undefined;
+  let expectOperand = true;
   for (let index = 0; index < line.length; index += 1) {
     const char = line[index];
     const next = line[index + 1];
@@ -92,15 +93,17 @@ function withoutStringsAndComments(line: string, inBlockComment: boolean): [stri
           // Escaped double quote.
         } else {
           quote = undefined;
+          expectOperand = false;
         }
       }
       continue;
     }
 
     if (char === "'" || char === '"') {
-      // A quote immediately after an identifier or closing delimiter is transpose.
-      const previous = result.slice(-1);
-      if (char === "'" && /[\w)\]}]/.test(previous)) result += char;
+      // A single quote after a complete operand is transpose. Keeping lexical
+      // operand state also covers the non-conjugating dot transpose `(1:6).'`
+      // and whitespace before transpose, neither of which is a string.
+      if (char === "'" && !expectOperand) result += char;
       else {
         quote = char;
         result += ' ';
@@ -108,12 +111,61 @@ function withoutStringsAndComments(line: string, inBlockComment: boolean): [stri
       continue;
     }
     result += char;
+    if (/\s/.test(char)) continue;
+    if (/[A-Za-z0-9_]/.test(char) || char === ')' || char === ']' || char === '}') {
+      expectOperand = false;
+    } else if (char === '.' && next === "'") {
+      // Dot transpose preserves the operand state for the following quote.
+    } else if (char === '(' || char === '[' || char === '{' || char === ',' || char === ';'
+      || /=|\+|-|\*|\/|\\|\^|&|\||~|:|<|>/.test(char)) {
+      expectOperand = true;
+    }
   }
   return [result.padEnd(line.length, ' '), inBlockComment];
 }
 
 function columnForLine(line: string): number {
   return Math.max(1, line.search(/\S/) + 1);
+}
+
+type StructuralWord = { word: string; column: number };
+
+/**
+ * Return the first word of every top-level statement on a line. Octave allows
+ * compact control flow such as `if cond, a = 1; else, a = 2; endif`, so only
+ * looking at the first word of the physical line leaves the inner `if` open
+ * and makes a following `endwhile` look invalid.
+ */
+function structuralWords(line: string, incomingDepth: number): StructuralWord[] {
+  const words: StructuralWord[] = [];
+  let depth = incomingDepth;
+  let expectsWord = depth === 0;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    if (char === '(' || char === '[' || char === '{') {
+      depth += 1;
+      expectsWord = false;
+      continue;
+    }
+    if (char === ')' || char === ']' || char === '}') {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+    if (depth === 0 && (char === ',' || char === ';')) {
+      expectsWord = true;
+      continue;
+    }
+    if (!expectsWord || depth !== 0 || /\s/.test(char)) continue;
+
+    const match = line.slice(index).match(/^([A-Za-z_]\w*)/);
+    if (match) {
+      words.push({ word: match[1].toLowerCase(), column: index + 1 });
+      index += match[1].length - 1;
+    }
+    expectsWord = false;
+  }
+  return words;
 }
 
 export function lintOctave(source: string): OctaveDiagnostic[] {
@@ -136,6 +188,7 @@ export function lintOctave(source: string): OctaveDiagnostic[] {
       blockCommentStart = undefined;
     }
 
+    const statementWords = structuralWords(line, delimiters.length);
     for (let columnIndex = 0; columnIndex < line.length; columnIndex += 1) {
       const char = line[columnIndex];
       const doubleSeparator = (char === ',' || char === ';')
@@ -170,50 +223,47 @@ export function lintOctave(source: string): OctaveDiagnostic[] {
       }
     }
 
-    const trimmed = line.trim();
-    const firstWord = trimmed.match(/^([A-Za-z_]\w*)\b/)?.[1]?.toLowerCase();
-    if (!firstWord) return;
+    statementWords.forEach(({ word: structuralWord, column }) => {
+      if (Object.hasOwn(openerToCloser, structuralWord)) {
+        blocks.push({ kind: structuralWord, line: lineNumber, column });
+        return;
+      }
 
-    if (Object.hasOwn(openerToCloser, firstWord)) {
-      blocks.push({ kind: firstWord, line: lineNumber, column: columnForLine(line) });
-      return;
-    }
+      if (structuralWord === 'end') {
+        if (blocks.length) blocks.pop();
+        else diagnostics.push({
+          line: lineNumber,
+          column,
+          severity: 'error',
+          message: '«end» no tiene un bloque de apertura.',
+          code: `${diagnosticCodes.orphanBlockCloser}:end`,
+        });
+        return;
+      }
 
-    if (firstWord === 'end') {
-      if (blocks.length) blocks.pop();
-      else diagnostics.push({
-        line: lineNumber,
-        column: columnForLine(line),
-        severity: 'error',
-        message: '«end» no tiene un bloque de apertura.',
-        code: `${diagnosticCodes.orphanBlockCloser}:end`,
-      });
-      return;
-    }
-
-    const expectedOpener = closerToOpener[firstWord];
-    if (expectedOpener) {
+      const expectedOpener = closerToOpener[structuralWord];
+      if (!expectedOpener) return;
       const open = blocks.at(-1);
       if (!open) {
         diagnostics.push({
           line: lineNumber,
-          column: columnForLine(line),
+          column,
           severity: 'error',
-          message: `«${firstWord}» no tiene un bloque de apertura.`,
-          code: `${diagnosticCodes.orphanBlockCloser}:${firstWord}`,
+          message: `«${structuralWord}» no tiene un bloque de apertura.`,
+          code: `${diagnosticCodes.orphanBlockCloser}:${structuralWord}`,
         });
       } else if (open.kind !== expectedOpener) {
         diagnostics.push({
           line: lineNumber,
-          column: columnForLine(line),
+          column,
           severity: 'error',
-          message: `«${firstWord}» cierra «${expectedOpener}», pero el bloque abierto es «${open.kind}».`,
+          message: `«${structuralWord}» cierra «${expectedOpener}», pero el bloque abierto es «${open.kind}».`,
           code: `${diagnosticCodes.mismatchedBlockCloser}:${openerToCloser[open.kind]}`,
         });
       } else {
         blocks.pop();
       }
-    }
+    });
   });
 
   delimiters.forEach((open, index) => diagnostics.push({
