@@ -57,6 +57,16 @@ export interface ExecuteResult {
   stderr: string;
   durationMs: number;
   error: RuntimeError | null;
+  timedOut?: boolean;
+  cancelled?: boolean;
+}
+
+export interface ExecutionProgress {
+  cellId: string;
+  stdout: string;
+  stderr: string;
+  durationMs: number;
+  timedOut: boolean;
 }
 
 export interface InspectResult {
@@ -68,8 +78,13 @@ export interface InspectResult {
 
 export interface RuntimeManager {
   open(documentId: string, clientId?: string): Promise<{ runtimeId: string }>;
-  execute(runtimeId: string, input: ExecuteInput): Promise<ExecuteResult>;
+  execute(
+    runtimeId: string,
+    input: ExecuteInput,
+    onProgress?: (progress: ExecutionProgress) => void,
+  ): Promise<ExecuteResult>;
   inspect(runtimeId: string, expression: string): Promise<InspectResult>;
+  interrupt(runtimeId: string): Promise<void>;
   close(runtimeId: string): Promise<void>;
   closeAll(): Promise<void>;
   status(): RuntimeStatus[];
@@ -95,6 +110,12 @@ interface ProtocolResult {
   error: OctaveErrorPayload | null;
 }
 
+interface ProtocolProgress {
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+}
+
 interface PendingRequest {
   token: string;
   stdout: string;
@@ -102,12 +123,30 @@ interface PendingRequest {
   stdoutDone: boolean;
   stderrDone: boolean;
   timer: NodeJS.Timeout;
+  onProgress?: (progress: ProtocolProgress) => void;
   resolve: (result: ProtocolResult) => void;
   reject: (error: Error) => void;
 }
 
 class RuntimeOperationalError extends Error {}
-class RuntimeTimeoutError extends RuntimeOperationalError {}
+class RuntimeTimeoutError extends RuntimeOperationalError {
+  constructor(
+    message: string,
+    readonly stdout: string,
+    readonly stderr: string,
+  ) {
+    super(message);
+  }
+}
+class RuntimeCancelledError extends RuntimeOperationalError {
+  constructor(
+    message: string,
+    readonly stdout: string,
+    readonly stderr: string,
+  ) {
+    super(message);
+  }
+}
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_OUTPUT_BYTES = 10 * 1024 * 1024;
@@ -232,7 +271,10 @@ class OctaveRuntime {
     }
   }
 
-  execute(input: ExecuteInput): Promise<ExecuteResult> {
+  execute(
+    input: ExecuteInput,
+    onProgress?: (progress: ExecutionProgress) => void,
+  ): Promise<ExecuteResult> {
     if (!input || typeof input.cellId !== "string" || typeof input.code !== "string") {
       return Promise.reject(new TypeError("execute input must contain string cellId and code fields"));
     }
@@ -240,9 +282,18 @@ class OctaveRuntime {
     return this.enqueue(async () => {
       const startedAt = performance.now();
       const sourcePath = join(this.directory, `cell-${safeFilePart(input.cellId)}-${randomUUID()}.m`);
+      const reportProgress = onProgress
+        ? (progress: ProtocolProgress) => onProgress({
+            cellId: input.cellId,
+            stdout: progress.stdout,
+            stderr: progress.stderr,
+            durationMs: Math.max(0, performance.now() - startedAt),
+            timedOut: progress.timedOut,
+          })
+        : undefined;
 
       try {
-        const protocol = await this.runSource(input.code, sourcePath);
+        const protocol = await this.runSource(input.code, sourcePath, reportProgress);
         return {
           cellId: input.cellId,
           stdout: trimOuterBlankLines(protocol.stdout),
@@ -251,13 +302,14 @@ class OctaveRuntime {
           error: protocol.error ? normalizeOctaveError(protocol.error, sourcePath) : null,
         };
       } catch (error) {
-        if (error instanceof RuntimeTimeoutError) {
+        if (error instanceof RuntimeTimeoutError || error instanceof RuntimeCancelledError) {
           return {
             cellId: input.cellId,
-            stdout: "",
-            stderr: "",
+            stdout: trimOuterBlankLines(error.stdout),
+            stderr: trimOuterBlankLines(error.stderr),
             durationMs: Math.max(0, performance.now() - startedAt),
             error: { message: error.message, line: null, column: null },
+            ...(error instanceof RuntimeTimeoutError ? { timedOut: true } : { cancelled: true }),
           };
         }
         throw error;
@@ -328,6 +380,24 @@ class OctaveRuntime {
     return this.enqueue(() => this.forceClose(), true);
   }
 
+  async interrupt(): Promise<void> {
+    this.closing = true;
+    const pending = this.pending;
+    if (pending) {
+      const partial = this.protocolProgress(pending, false);
+      const error = new RuntimeCancelledError(
+        "La ejecución de Octave fue detenida por el usuario",
+        partial.stdout,
+        partial.stderr,
+      );
+      this.exitError = error;
+      this.failPending(error);
+    }
+    if (!this.exited) this.child.kill();
+    await this.exitPromise;
+    await rm(this.directory, { recursive: true, force: true });
+  }
+
   forceClose(): Promise<void> {
     return (async () => {
       if (!this.exited) {
@@ -364,7 +434,11 @@ class OctaveRuntime {
     return result;
   }
 
-  private async runSource(code: string, labelOrPath: string): Promise<ProtocolResult> {
+  private async runSource(
+    code: string,
+    labelOrPath: string,
+    onProgress?: (progress: ProtocolProgress) => void,
+  ): Promise<ProtocolResult> {
     if (this.exited) {
       throw this.exitError ?? new RuntimeOperationalError(`Octave runtime ${this.runtimeId} is closed`);
     }
@@ -399,21 +473,31 @@ class OctaveRuntime {
     ].join("\n");
 
     try {
-      return await this.sendCommand(token, command);
+      return await this.sendCommand(token, command, onProgress);
     } finally {
       await rm(sourcePath, { force: true }).catch(() => undefined);
     }
   }
 
-  private sendCommand(token: string, command: string): Promise<ProtocolResult> {
+  private sendCommand(
+    token: string,
+    command: string,
+    onProgress?: (progress: ProtocolProgress) => void,
+  ): Promise<ProtocolResult> {
     if (this.pending) {
       return Promise.reject(new RuntimeOperationalError("Internal error: concurrent Octave commands"));
     }
 
     return new Promise<ProtocolResult>((resolveRequest, rejectRequest) => {
       const timer = setTimeout(() => {
+        const pending = this.pending;
+        if (!pending || pending.token !== token) return;
+        const partial = this.protocolProgress(pending, true);
+        pending.onProgress?.(partial);
         const timeoutError = new RuntimeTimeoutError(
           `Octave execution timed out after ${this.timeoutMs} ms; the runtime was terminated`,
+          partial.stdout,
+          partial.stderr,
         );
         this.exitError = timeoutError;
         this.failPending(timeoutError);
@@ -428,6 +512,7 @@ class OctaveRuntime {
         stdoutDone: false,
         stderrDone: false,
         timer,
+        onProgress,
         resolve: resolveRequest,
         reject: rejectRequest,
       };
@@ -458,7 +543,25 @@ class OctaveRuntime {
 
     pending.stdoutDone = pending.stdout.includes(`__OCTAVE_${pending.token}_OUT_END__`);
     pending.stderrDone = pending.stderr.includes(`__OCTAVE_${pending.token}_ERR_END__`);
+    pending.onProgress?.(this.protocolProgress(pending, false));
     if (pending.stdoutDone && pending.stderrDone) this.completePending(pending);
+  }
+
+  private protocolProgress(pending: PendingRequest, timedOut: boolean): ProtocolProgress {
+    const token = pending.token;
+    return {
+      stdout: extractPartialProtocolStream(
+        pending.stdout,
+        `__OCTAVE_${token}_OUT_BEGIN__\n`,
+        [`\n__OCTAVE_${token}_META__`, `\n__OCTAVE_${token}_OUT_END__`],
+      ),
+      stderr: extractPartialProtocolStream(
+        pending.stderr,
+        `__OCTAVE_${token}_ERR_BEGIN__\n`,
+        [`\n__OCTAVE_${token}_ERR_END__`],
+      ),
+      timedOut,
+    };
   }
 
   private completePending(pending: PendingRequest): void {
@@ -616,15 +719,21 @@ class RuntimeManagerImpl implements RuntimeManager {
     });
   }
 
-  async execute(runtimeId: string, input: ExecuteInput): Promise<ExecuteResult> {
+  async execute(
+    runtimeId: string,
+    input: ExecuteInput,
+    onProgress?: (progress: ExecutionProgress) => void,
+  ): Promise<ExecuteResult> {
     const managed = this.get(runtimeId);
     this.touch(runtimeId, managed);
+    let closeAfterExecution = managed.role === "help";
     try {
-      const result = await managed.runtime.execute(input);
-      if (managed.role !== "help" && managed.runtime.alive) this.touch(runtimeId, managed);
+      const result = await managed.runtime.execute(input, onProgress);
+      closeAfterExecution ||= result.timedOut === true;
+      if (!closeAfterExecution && managed.runtime.alive) this.touch(runtimeId, managed);
       return result;
     } finally {
-      if (managed.role === "help" || !managed.runtime.alive) {
+      if (closeAfterExecution || !managed.runtime.alive) {
         await this.close(runtimeId).catch(() => undefined);
       }
     }
@@ -642,6 +751,13 @@ class RuntimeManagerImpl implements RuntimeManager {
         await this.close(runtimeId).catch(() => undefined);
       }
     }
+  }
+
+  async interrupt(runtimeId: string): Promise<void> {
+    await this.serialize(async () => {
+      const managed = this.runtimes.get(runtimeId);
+      if (managed) await this.closeManaged(runtimeId, managed, true);
+    });
   }
 
   async close(runtimeId: string): Promise<void> {
@@ -734,14 +850,19 @@ class RuntimeManagerImpl implements RuntimeManager {
     lease.timer.unref();
   }
 
-  private async closeManaged(runtimeId: string, managed: ManagedRuntime): Promise<void> {
+  private async closeManaged(
+    runtimeId: string,
+    managed: ManagedRuntime,
+    interrupt = false,
+  ): Promise<void> {
     if (this.runtimes.get(runtimeId) !== managed) return;
     this.runtimes.delete(runtimeId);
     if (managed.idleTimer) clearTimeout(managed.idleTimer);
     const slots = this.clientSlots.get(managed.clientId);
     if (slots?.[managed.role] === runtimeId) delete slots[managed.role];
     if (slots && !slots.notebook && !slots.help) this.clientSlots.delete(managed.clientId);
-    await managed.runtime.close();
+    if (interrupt) await managed.runtime.interrupt();
+    else await managed.runtime.close();
   }
 
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
@@ -897,6 +1018,22 @@ function trimOuterBlankLines(value: string): string {
   return value
     .replace(/^(?:[\t ]*\r?\n)+/, "")
     .replace(/(?:\r?\n[\t ]*)+$/, "");
+}
+
+function extractPartialProtocolStream(
+  value: string,
+  beginMarker: string,
+  endMarkers: string[],
+): string {
+  const start = value.indexOf(beginMarker);
+  if (start < 0) return "";
+  const contentStart = start + beginMarker.length;
+  let contentEnd = value.length;
+  for (const marker of endMarkers) {
+    const markerIndex = value.indexOf(marker, contentStart);
+    if (markerIndex >= 0) contentEnd = Math.min(contentEnd, markerIndex);
+  }
+  return value.slice(contentStart, contentEnd).replace(/^(?:[\t ]*\r?\n)+/, "");
 }
 
 function positiveInteger(value: number | undefined, fallback: number, name: string): number {

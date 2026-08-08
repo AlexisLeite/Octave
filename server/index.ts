@@ -254,8 +254,37 @@ app.post('/api/runtime/open', async (req, res, next) => {
 app.post('/api/runtime/execute', async (req, res, next) => {
   try { res.json(await runtimes.execute(String(req.body.runtimeId || ''), { cellId: String(req.body.cellId || ''), code: String(req.body.code || '') })) } catch (error) { next(error) }
 })
+app.post('/api/runtime/execute-stream', async (req, res) => {
+  res.status(200)
+  res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8')
+  res.setHeader('Cache-Control', 'no-cache, no-transform')
+  res.setHeader('X-Accel-Buffering', 'no')
+  res.flushHeaders()
+
+  let connected = true
+  res.once('close', () => { connected = false })
+  const send = (event: unknown) => {
+    if (connected && !res.writableEnded) res.write(`${JSON.stringify(event)}\n`)
+  }
+
+  try {
+    const result = await runtimes.execute(
+      String(req.body.runtimeId || ''),
+      { cellId: String(req.body.cellId || ''), code: String(req.body.code || '') },
+      (progress) => send({ type: 'progress', progress }),
+    )
+    send({ type: 'result', result })
+  } catch (error) {
+    send({ type: 'error', error: error instanceof Error ? error.message : String(error) })
+  } finally {
+    if (!res.writableEnded) res.end()
+  }
+})
 app.post('/api/runtime/inspect', async (req, res, next) => {
   try { res.json(await runtimes.inspect(String(req.body.runtimeId || ''), String(req.body.expression || ''))) } catch (error) { next(error) }
+})
+app.post('/api/runtime/interrupt', async (req, res, next) => {
+  try { await runtimes.interrupt(String(req.body.runtimeId || '')); res.json({ ok: true }) } catch (error) { next(error) }
 })
 app.post('/api/runtime/close', async (req, res, next) => {
   try { await runtimes.close(String(req.body.runtimeId || '')); res.json({ ok: true }) } catch (error) { next(error) }

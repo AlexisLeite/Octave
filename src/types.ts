@@ -35,4 +35,14 @@ export interface ExecutionResult {
   stderr: string
   durationMs: number
   error: ExecutionError | null
+  timedOut?: boolean
+  cancelled?: boolean
+}
+
+export interface ExecutionProgress {
+  cellId: string
+  stdout: string
+  stderr: string
+  durationMs: number
+  timedOut: boolean
 }

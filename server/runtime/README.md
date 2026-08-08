@@ -4,6 +4,13 @@
 runtime. Calls within a runtime are serialized; distinct runtimes may execute in
 parallel. Variables therefore survive between `execute` calls until `close`.
 
+`execute` accepts an optional progress callback. It receives cumulative stdout
+and stderr snapshots as Octave emits them, before the final result is available.
+The HTTP API exposes those snapshots as NDJSON. A timeout still terminates the
+unresponsive process, but its final result preserves every output chunk received
+before termination. `interrupt(runtimeId)` provides the same preservation for an
+explicit user Stop action and removes the dead runtime immediately.
+
 `open(documentId, clientId)` assigns the runtime to one of two server-enforced
 slots for that browser tab: one notebook slot and one ephemeral help slot
 (`documentId` beginning with `help-`). Opening a notebook atomically closes and

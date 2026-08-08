@@ -1,4 +1,4 @@
-import type { ExecutionResult, NotebookDocument, TreeNode } from './types'
+import type { ExecutionProgress, ExecutionResult, NotebookDocument, TreeNode } from './types'
 
 const RUNTIME_CLIENT_KEY = 'octave-runtime-client-v1'
 const fallbackRuntimeClientId = crypto.randomUUID()
@@ -177,6 +177,67 @@ async function requestBlob(url: string): Promise<Blob> {
   return response.blob()
 }
 
+async function executeStreaming(
+  runtimeId: string,
+  cellId: string,
+  code: string,
+  onProgress?: (progress: ExecutionProgress) => void,
+): Promise<ExecutionResult> {
+  let response: Response
+  try {
+    response = await fetch('/api/runtime/execute-stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        Accept: 'application/x-ndjson',
+      },
+      body: JSON.stringify({ runtimeId, cellId, code }),
+    })
+  } catch (error) {
+    updateBackendConnection('offline')
+    throw error
+  }
+
+  if (!response.ok) {
+    updateBackendConnection(response.status >= 500 ? 'offline' : 'online')
+    const body = await response.json().catch(() => ({ error: response.statusText }))
+    throw new Error(body.error || response.statusText)
+  }
+  if (!response.body) throw new Error('El servidor no devolvió un stream de ejecución')
+  updateBackendConnection('online')
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+  let result: ExecutionResult | undefined
+
+  const consumeLine = (line: string) => {
+    if (!line.trim()) return
+    const event = JSON.parse(line) as
+      | { type: 'progress'; progress: ExecutionProgress }
+      | { type: 'result'; result: ExecutionResult }
+      | { type: 'error'; error: string }
+    if (event.type === 'progress') onProgress?.(event.progress)
+    else if (event.type === 'result') result = event.result
+    else throw new Error(event.error || 'Falló la ejecución de Octave')
+  }
+
+  while (true) {
+    const { done, value } = await reader.read()
+    buffer += decoder.decode(value, { stream: !done })
+    let newline = buffer.indexOf('\n')
+    while (newline >= 0) {
+      consumeLine(buffer.slice(0, newline))
+      buffer = buffer.slice(newline + 1)
+      newline = buffer.indexOf('\n')
+    }
+    if (done) break
+  }
+  consumeLine(buffer)
+  if (!result) throw new Error('La ejecución terminó sin un resultado final')
+  return result
+}
+
 export const api = {
   tree: () => request<{ nodes: TreeNode[] }>('/api/tree'),
   read: (path: string) => request<{ document: NotebookDocument; absolutePath: string }>(`/api/files?path=${encodeURIComponent(path)}`),
@@ -187,7 +248,13 @@ export const api = {
   rename: (path: string, nextPath: string) => request<{ path: string }>('/api/files/rename', { method: 'POST', body: JSON.stringify({ path, nextPath }) }),
   runtime: {
     open: (documentId: string) => request<{ runtimeId: string }>('/api/runtime/open', { method: 'POST', body: JSON.stringify({ documentId, clientId: runtimeClientId() }) }),
-    execute: (runtimeId: string, cellId: string, code: string) => request<ExecutionResult>('/api/runtime/execute', { method: 'POST', body: JSON.stringify({ runtimeId, cellId, code }) }),
+    execute: (
+      runtimeId: string,
+      cellId: string,
+      code: string,
+      onProgress?: (progress: ExecutionProgress) => void,
+    ) => executeStreaming(runtimeId, cellId, code, onProgress),
+    interrupt: (runtimeId: string) => request<{ ok: true }>('/api/runtime/interrupt', { method: 'POST', body: JSON.stringify({ runtimeId }) }),
     inspect: (runtimeId: string, expression: string) => request<{ expression: string; display: string; type?: string; shape?: string }>('/api/runtime/inspect', { method: 'POST', body: JSON.stringify({ runtimeId, expression }) }),
     close: (runtimeId: string) => request<{ ok: true }>('/api/runtime/close', { method: 'POST', keepalive: true, body: JSON.stringify({ runtimeId }) }),
     heartbeat: () => sendRuntimeHeartbeat(),

@@ -1,8 +1,9 @@
-import { Braces, Copy, GripVertical, Play, Plus, RotateCcw, Text, Trash2, WandSparkles } from 'lucide-react'
-import { useMemo } from 'react'
+import { Braces, Copy, GripVertical, Play, Plus, RotateCcw, Square, Text, Trash2, WandSparkles } from 'lucide-react'
+import { useEffect, useMemo, useRef } from 'react'
 import type { ExecutionResult, NotebookCell } from '../types'
 import { LoadingDot } from './LoadingDot'
 import { MarkdownEditor } from './MarkdownEditor'
+import { NumberedOutput } from './NumberedOutput'
 import { OctaveEditor } from './OctaveEditor'
 
 interface CellProps {
@@ -13,6 +14,7 @@ interface CellProps {
   running: boolean
   onChange: (source: string) => void
   onRun: () => void
+  onStop: () => void
   onFormat: () => void
   onDelete: () => void
   onClearOutput: () => void
@@ -33,7 +35,12 @@ interface CellProps {
   onSplitMarkdownSelection: (remaining: string, extracted: string) => void
 }
 
-export function Cell({ cell, index, order, output, running, onChange, onRun, onFormat, onDelete, onClearOutput, onCopyContext, onKindChange, onInspect, completionSources, viewStateKey, dragging, dropEdge, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave, showInsertAfter, onAddAfter, onSplitMarkdownSelection }: CellProps) {
+export function Cell({ cell, index, order, output, running, onChange, onRun, onStop, onFormat, onDelete, onClearOutput, onCopyContext, onKindChange, onInspect, completionSources, viewStateKey, dragging, dropEdge, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave, showInsertAfter, onAddAfter, onSplitMarkdownSelection }: CellProps) {
+  const cellRef = useRef<HTMLElement>(null)
+  const gutterRef = useRef<HTMLElement>(null)
+  const executionIndicatorRef = useRef<HTMLSpanElement>(null)
+  const editorRegionRef = useRef<HTMLDivElement>(null)
+  const actionsBoundaryRef = useRef<HTMLDivElement>(null)
   const resultMatchesSource = output?.source === cell.source
   const diagnostics = useMemo(() => resultMatchesSource && output?.error?.line ? [{
       line: output.error.line,
@@ -42,8 +49,82 @@ export function Cell({ cell, index, order, output, running, onChange, onRun, onF
       message: output.error.message,
     }] : [], [resultMatchesSource, output?.error?.line, output?.error?.column, output?.error?.message])
 
+  useEffect(() => {
+    const region = editorRegionRef.current
+    const boundary = actionsBoundaryRef.current
+    const cellElement = cellRef.current
+    const gutter = gutterRef.current
+    const indicator = executionIndicatorRef.current
+    const scroller = region?.closest<HTMLElement>('.notebook')
+    if (!region || !boundary || !cellElement || !gutter || !scroller) return
+
+    let frame = 0
+    const layout = () => {
+      frame = 0
+      const regionRect = region.getBoundingClientRect()
+      const cellRect = cellElement.getBoundingClientRect()
+      const gutterRect = gutter.getBoundingClientRect()
+      const scrollerRect = scroller.getBoundingClientRect()
+      const actions = boundary.firstElementChild as HTMLElement | null
+      const actionWidth = actions?.getBoundingClientRect().width ?? boundary.getBoundingClientRect().width
+      const actionHeight = Math.max(33, boundary.getBoundingClientRect().height)
+      const stickyTop = scrollerRect.top + 2
+      const shouldFloat = regionRect.top < stickyTop
+        && regionRect.bottom > stickyTop + actionHeight + 2
+
+      if (shouldFloat) {
+        boundary.dataset.floating = 'true'
+        boundary.style.setProperty('--cell-actions-top', `${stickyTop}px`)
+        boundary.style.setProperty('--cell-actions-left', `${regionRect.right - actionWidth - 6}px`)
+      } else {
+        delete boundary.dataset.floating
+        boundary.style.removeProperty('--cell-actions-top')
+        boundary.style.removeProperty('--cell-actions-left')
+      }
+
+      if (!indicator) return
+      const indicatorSize = Math.max(6, indicator.getBoundingClientRect().width)
+      const indicatorTop = stickyTop + 8
+      const shouldFloatIndicator = running
+        && cellRect.top < indicatorTop
+        && cellRect.bottom > indicatorTop + indicatorSize + 2
+      if (shouldFloatIndicator) {
+        indicator.dataset.floating = 'true'
+        indicator.style.setProperty('--cell-indicator-top', `${indicatorTop}px`)
+        indicator.style.setProperty('--cell-indicator-left', `${gutterRect.left + (gutterRect.width - indicatorSize) / 2}px`)
+      } else {
+        delete indicator.dataset.floating
+        indicator.style.removeProperty('--cell-indicator-top')
+        indicator.style.removeProperty('--cell-indicator-left')
+      }
+    }
+    const schedule = () => {
+      if (!frame) frame = window.requestAnimationFrame(layout)
+    }
+    const observer = new ResizeObserver(schedule)
+    observer.observe(region)
+    observer.observe(cellElement)
+    observer.observe(scroller)
+    scroller.addEventListener('scroll', schedule, { passive: true })
+    window.addEventListener('resize', schedule)
+    schedule()
+
+    return () => {
+      window.cancelAnimationFrame(frame)
+      observer.disconnect()
+      if (indicator) {
+        delete indicator.dataset.floating
+        indicator.style.removeProperty('--cell-indicator-top')
+        indicator.style.removeProperty('--cell-indicator-left')
+      }
+      scroller.removeEventListener('scroll', schedule)
+      window.removeEventListener('resize', schedule)
+    }
+  }, [running])
+
   return (
     <article
+      ref={cellRef}
       data-cell-id={cell.id}
       className={`cell ${running ? 'running' : ''} ${dragging ? 'dragging' : ''} ${dropEdge ? `drop-${dropEdge}` : ''}`}
       style={{ order }}
@@ -65,6 +146,7 @@ export function Cell({ cell, index, order, output, running, onChange, onRun, onF
       }}
     >
       <aside
+        ref={gutterRef}
         className="cell-gutter"
         draggable
         onDragStart={(event) => {
@@ -76,30 +158,37 @@ export function Cell({ cell, index, order, output, running, onChange, onRun, onF
       >
         <GripVertical size={14} />
         <span>{index + 1}</span>
-        {cell.kind === 'code' && <LoadingDot active={running} />}
+        {cell.kind === 'code' && <span ref={executionIndicatorRef} className="cell-execution-indicator"><LoadingDot active={running} /></span>}
       </aside>
       <div className="cell-body">
-        <div className="cell-actions">
-          {cell.kind === 'code' && <button aria-label="Ejecutar" title="Ejecutar · Ctrl+Enter" onClick={onRun}><Play size={14} /></button>}
-          {cell.kind === 'code' && <button aria-label="Formatear código" title="Formatear · Ctrl+Shift+F" onClick={onFormat}><WandSparkles size={14} /></button>}
-          {cell.kind === 'code' && <button aria-label="Copiar contexto" title="Copiar contexto" onClick={onCopyContext}><Copy size={14} /></button>}
-          {cell.kind === 'code' && <button aria-label="Borrar salida" title="Borrar salida" onClick={onClearOutput} disabled={!output}><RotateCcw size={14} /></button>}
-          <button
-            aria-label={cell.kind === 'code' ? 'Convertir a markdown' : 'Convertir a código'}
-            title={cell.kind === 'code' ? 'Markdown' : 'Código'}
-            onClick={() => onKindChange(cell.kind === 'code' ? 'markdown' : 'code')}
-          >{cell.kind === 'code' ? <Text size={14} /> : <Braces size={14} />}</button>
-          <button aria-label="Eliminar celda" title="Eliminar" onClick={onDelete}><Trash2 size={14} /></button>
+        <div ref={editorRegionRef} className="cell-editor-region">
+          <div ref={actionsBoundaryRef} className="cell-actions-boundary">
+            <div className="cell-actions">
+              {cell.kind === 'code' && (running
+                ? <button type="button" aria-label="Detener" title="Detener ejecución" onClick={onStop}><Square size={13} fill="currentColor" /></button>
+                : <button type="button" aria-label="Ejecutar" title="Ejecutar · Ctrl+Enter" onClick={onRun}><Play size={14} /></button>)}
+              {cell.kind === 'code' && <button type="button" aria-label="Formatear código" title="Formatear · Ctrl+Shift+F" onClick={onFormat}><WandSparkles size={14} /></button>}
+              {cell.kind === 'code' && <button type="button" aria-label="Copiar contexto" title="Copiar contexto" onClick={onCopyContext}><Copy size={14} /></button>}
+              {cell.kind === 'code' && <button type="button" aria-label="Borrar salida" title="Borrar salida · no reinicia Octave" onClick={onClearOutput} disabled={!output}><RotateCcw size={14} /></button>}
+              <button
+                type="button"
+                aria-label={cell.kind === 'code' ? 'Convertir a markdown' : 'Convertir a código'}
+                title={cell.kind === 'code' ? 'Markdown' : 'Código'}
+                onClick={() => onKindChange(cell.kind === 'code' ? 'markdown' : 'code')}
+              >{cell.kind === 'code' ? <Text size={14} /> : <Braces size={14} />}</button>
+              <button type="button" aria-label="Eliminar celda" title="Eliminar" onClick={onDelete}><Trash2 size={14} /></button>
+            </div>
+          </div>
+          {cell.kind === 'code' ? (
+            <OctaveEditor value={cell.source} onChange={onChange} onRun={onRun} onFormat={onFormat} diagnostics={diagnostics} onInspect={onInspect} completionSources={completionSources} viewStateKey={viewStateKey} />
+          ) : (
+            <MarkdownEditor value={cell.source} onChange={onChange} onSplitSelection={onSplitMarkdownSelection} viewStateKey={viewStateKey} />
+          )}
         </div>
-        {cell.kind === 'code' ? (
-          <OctaveEditor value={cell.source} onChange={onChange} onRun={onRun} onFormat={onFormat} diagnostics={diagnostics} onInspect={onInspect} completionSources={completionSources} viewStateKey={viewStateKey} />
-        ) : (
-          <MarkdownEditor value={cell.source} onChange={onChange} onSplitSelection={onSplitMarkdownSelection} viewStateKey={viewStateKey} />
-        )}
         {output && (output.stdout || output.stderr || output.error) && (
           <div className={`cell-output ${output.error ? 'error' : ''}`}>
-            {output.stdout && <pre>{output.stdout}</pre>}
-            {output.stderr && <pre>{output.stderr}</pre>}
+            {output.stdout && <NumberedOutput value={output.stdout} />}
+            {output.stderr && <NumberedOutput value={output.stderr} />}
             {output.error && <pre>{output.error.message}</pre>}
             <span className="duration">{output.durationMs} ms</span>
           </div>

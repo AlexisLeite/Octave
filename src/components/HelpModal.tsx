@@ -1,10 +1,11 @@
-import { ChevronDown, ChevronRight, Play, RotateCcw, Search, X } from 'lucide-react'
+import { ChevronDown, ChevronRight, Play, RotateCcw, Search, Square, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { api } from '../api'
 import { findHelpNode, findHelpPath, octaveHelp, searchHelp, type HelpBlock, type HelpNode } from '../help/octaveHelp'
 import type { ExecutionResult } from '../types'
 import { LoadingDot } from './LoadingDot'
+import { NumberedOutput } from './NumberedOutput'
 import { OctaveEditor } from './OctaveEditor'
 import { ReadonlyMarkdown } from './ReadonlyMarkdown'
 import './HelpModal.css'
@@ -77,6 +78,7 @@ function ExecutableBlock({ title, originalCode }: { title?: string; originalCode
   const [result, setResult] = useState<ExecutionResult | null>(null)
   const [requestError, setRequestError] = useState<string | null>(null)
   const [running, setRunning] = useState(false)
+  const runtimeRef = useRef<string | null>(null)
 
   async function run() {
     if (running) return
@@ -85,7 +87,12 @@ function ExecutableBlock({ title, originalCode }: { title?: string; originalCode
     try {
       const opened = await api.runtime.open(`help-${crypto.randomUUID()}`)
       runtimeId = opened.runtimeId
-      const nextResult = await api.runtime.execute(runtimeId, `help-example-${crypto.randomUUID()}`, code)
+      runtimeRef.current = runtimeId
+      const cellId = `help-example-${crypto.randomUUID()}`
+      const nextResult = await api.runtime.execute(runtimeId, cellId, code, (progress) => {
+        if (!progress.stdout && !progress.stderr && !progress.timedOut) return
+        setResult({ ...progress, error: null, source: code })
+      })
       setResult(nextResult)
       setRequestError(null)
     } catch (error) {
@@ -93,8 +100,16 @@ function ExecutableBlock({ title, originalCode }: { title?: string; originalCode
       setRequestError(error instanceof Error ? error.message : 'No se pudo ejecutar el ejemplo')
     } finally {
       if (runtimeId) await api.runtime.close(runtimeId).catch(() => undefined)
+      if (runtimeRef.current === runtimeId) runtimeRef.current = null
       setRunning(false)
     }
+  }
+
+  async function stop() {
+    const runtimeId = runtimeRef.current
+    if (!runtimeId) return
+    runtimeRef.current = null
+    await api.runtime.interrupt(runtimeId).catch(() => undefined)
   }
 
   function reset() {
@@ -109,7 +124,9 @@ function ExecutableBlock({ title, originalCode }: { title?: string; originalCode
         {title ? <h2>{title}</h2> : <span />}
         <div className="help-example-actions">
           <LoadingDot active={running} />
-          <button type="button" onClick={() => void run()} disabled={running} title={running ? 'Ejecutando…' : 'Ejecutar'} aria-label={`Ejecutar ${title ?? 'bloque'}`}><Play size={13} /></button>
+          {running
+            ? <button type="button" onClick={() => void stop()} title="Detener ejecución" aria-label={`Detener ${title ?? 'bloque'}`}><Square size={12} fill="currentColor" /></button>
+            : <button type="button" onClick={() => void run()} title="Ejecutar" aria-label={`Ejecutar ${title ?? 'bloque'}`}><Play size={13} /></button>}
           <button type="button" onClick={reset} title="Restablecer" aria-label={`Restablecer ${title ?? 'bloque'}`}><RotateCcw size={13} /></button>
         </div>
       </div>
@@ -118,8 +135,8 @@ function ExecutableBlock({ title, originalCode }: { title?: string; originalCode
       </div>
       {(result || requestError) && (
         <div className={`help-example-output${requestError || result?.error ? ' error' : ''}`} role="status">
-          {result?.stdout && <pre>{result.stdout}</pre>}
-          {result?.stderr && <pre>{result.stderr}</pre>}
+          {result?.stdout && <NumberedOutput value={result.stdout} />}
+          {result?.stderr && <NumberedOutput value={result.stderr} />}
           {result?.error && <pre>{result.error.message}</pre>}
           {requestError && <pre>{requestError}</pre>}
         </div>

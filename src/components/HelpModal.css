@@ -212,6 +212,8 @@
 .help-example-output.error { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); background: color-mix(in srgb, var(--danger-soft) 35%, var(--surface)); }
 .help-example-output pre { padding: 9px 12px; border: 0; border-radius: 0; color: inherit; background: transparent; font-size: 11.5px; white-space: pre-wrap; }
 .help-example-output pre + pre { border-top: 1px solid var(--border); }
+.help-example-output .numbered-output { padding: 9px 12px; font-size: 11.5px; }
+.help-example-output .numbered-output + .numbered-output { margin-top: 0; }
 
 .help-tree, .help-content, .help-results, .help-content pre {
   scrollbar-width: thin;

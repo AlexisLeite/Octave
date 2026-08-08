@@ -14,7 +14,7 @@ export function LoadingDot({ active, className = '' }: LoadingDotProps) {
       return
     }
     setOn(true)
-    const timer = window.setInterval(() => setOn((current) => !current), 480)
+    const timer = window.setInterval(() => setOn((current) => !current), 1000)
     return () => window.clearInterval(timer)
   }, [active])
 

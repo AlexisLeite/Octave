@@ -7,7 +7,9 @@ import { HelpModal } from './components/HelpModal'
 import { PdfViewer } from './components/PdfViewer'
 import { breadcrumbForCell, extractNotebookHeadings } from './editor/notebookHeadings'
 import { formatOctaveCode } from './editor/octaveFormat'
+import { numberedOutputText } from './editor/outputTail'
 import { notebookPdfName } from './editor/notebookFileName'
+import { clearNotebookCellOutput } from './editor/notebookOutput'
 import {
   applyNotebookSnapshot,
   createNotebookHistory,
@@ -16,7 +18,7 @@ import {
   undoNotebookEdit,
   type NotebookHistory,
 } from './editor/notebookHistory'
-import type { ExecutionResult, NotebookCell, NotebookDocument, TreeNode } from './types'
+import type { ExecutionProgress, ExecutionResult, NotebookCell, NotebookDocument, TreeNode } from './types'
 
 function AnimatedBreadcrumb({ path }: { path: string[] }) {
   const [visiblePath, setVisiblePath] = useState(path)
@@ -781,12 +783,7 @@ export default function App() {
   }
 
   function clearCellOutput(id: string) {
-    mutateDocument((current) => {
-      if (!current.outputs?.[id]) return current
-      const nextOutputs = { ...current.outputs }
-      delete nextOutputs[id]
-      return { ...current, outputs: nextOutputs }
-    }, { record: false })
+    mutateDocument((current) => clearNotebookCellOutput(current, id), { record: false })
     setOutputs((current) => {
       if (!current[id]) return current
       const next = { ...current }
@@ -827,21 +824,32 @@ export default function App() {
     return ensureRuntime()
   }
 
-  async function executeCell(cell: NotebookCell) {
+  async function executeCell(
+    cell: NotebookCell,
+    onProgress?: (progress: ExecutionProgress) => void,
+  ) {
     const id = await ensureRuntime()
     try {
-      return await api.runtime.execute(id, cell.id, cell.source)
+      return await api.runtime.execute(id, cell.id, cell.source, onProgress)
     } catch (error) {
       if (!isMissingRuntime(error)) throw error
       const recoveredId = await recoverRuntime()
-      return api.runtime.execute(recoveredId, cell.id, cell.source)
+      return api.runtime.execute(recoveredId, cell.id, cell.source, onProgress)
     }
   }
 
   async function runCell(cell: NotebookCell) {
     setRunning((current) => new Set(current).add(cell.id))
     try {
-      const execution = await executeCell(cell)
+      const execution = await executeCell(cell, (progress) => {
+        if (!progress.stdout && !progress.stderr && !progress.timedOut) return
+        const partial: ExecutionResult = { ...progress, source: cell.source, error: null }
+        setOutputs((current) => ({ ...current, [cell.id]: partial }))
+      })
+      if (execution.timedOut) {
+        runtimeId.current = null
+        runtimeOpening.current = null
+      }
       const result: ExecutionResult = { ...execution, source: cell.source }
       setOutputs((current) => ({ ...current, [cell.id]: result }))
       mutateDocument((current) => ({
@@ -850,6 +858,18 @@ export default function App() {
       }), { record: false })
     } catch (error) { setNotice((error as Error).message) }
     finally { setRunning((current) => { const next = new Set(current); next.delete(cell.id); return next }) }
+  }
+
+  async function stopExecution() {
+    const id = runtimeId.current ?? await runtimeOpening.current?.catch(() => null)
+    if (!id) return
+    runtimeId.current = null
+    runtimeOpening.current = null
+    try {
+      await api.runtime.interrupt(id)
+    } catch (error) {
+      if (!isMissingRuntime(error)) setNotice((error as Error).message)
+    }
   }
 
   async function copyCellContext(cell: NotebookCell, index: number, output?: ExecutionResult, isRunning = false) {
@@ -877,8 +897,8 @@ export default function App() {
       '```',
     ]
     if (output) {
-      if (output.stdout) sections.push('', 'Salida:', '```text', output.stdout.trimEnd(), '```')
-      if (output.stderr) sections.push('', 'stderr:', '```text', output.stderr.trimEnd(), '```')
+      if (output.stdout) sections.push('', 'Salida (últimas 200 líneas):', '```text', numberedOutputText(output.stdout), '```')
+      if (output.stderr) sections.push('', 'stderr (últimas 200 líneas):', '```text', numberedOutputText(output.stderr), '```')
       if (output.error) {
         const location = output.error.line
           ? ` (línea ${output.error.line}${output.error.column ? `, columna ${output.error.column}` : ''})`
@@ -1071,6 +1091,7 @@ export default function App() {
                     const latest = documentRef.current?.cells.find((candidate) => candidate.id === cell.id)
                     if (latest) void runCell(latest)
                   }}
+                  onStop={() => { void stopExecution() }}
                   onFormat={() => formatCell(cell.id)}
                   onDelete={() => removeCell(cell.id)}
                   onClearOutput={() => clearCellOutput(cell.id)}
