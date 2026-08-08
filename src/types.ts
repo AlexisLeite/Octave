@@ -30,6 +30,7 @@ export interface ExecutionError {
 
 export interface ExecutionResult {
   cellId: string
+  source?: string
   stdout: string
   stderr: string
   durationMs: number

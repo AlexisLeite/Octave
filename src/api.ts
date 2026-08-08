@@ -3,7 +3,7 @@ import type { ExecutionResult, NotebookDocument, TreeNode } from './types'
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const response = await fetch(url, {
     ...init,
-    headers: { 'Content-Type': 'application/json', ...init?.headers },
+    headers: { 'Content-Type': 'application/json; charset=utf-8', Accept: 'application/json', ...init?.headers },
   })
   if (!response.ok) {
     const body = await response.json().catch(() => ({ error: response.statusText }))

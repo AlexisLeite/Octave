@@ -1,4 +1,5 @@
-import { Braces, GripVertical, Play, Text, Trash2 } from 'lucide-react'
+import { Braces, GripVertical, Play, Plus, Text, Trash2 } from 'lucide-react'
+import { useMemo } from 'react'
 import type { ExecutionResult, NotebookCell } from '../types'
 import { MarkdownEditor } from './MarkdownEditor'
 import { OctaveEditor } from './OctaveEditor'
@@ -6,6 +7,7 @@ import { OctaveEditor } from './OctaveEditor'
 interface CellProps {
   cell: NotebookCell
   index: number
+  order: number
   output?: ExecutionResult
   running: boolean
   onChange: (source: string) => void
@@ -13,19 +15,58 @@ interface CellProps {
   onDelete: () => void
   onKindChange: (kind: NotebookCell['kind']) => void
   onInspect: (expression: string) => Promise<{ display: string; type?: string; shape?: string }>
+  dragging: boolean
+  dropEdge: 'before' | 'after' | null
+  onDragStart: () => void
+  onDragEnd: () => void
+  onDragOver: (edge: 'before' | 'after') => void
+  onDrop: (edge: 'before' | 'after') => void
+  onDragLeave: () => void
+  showInsertAfter: boolean
+  onAddAfter: (kind: NotebookCell['kind']) => void
+  onSplitMarkdownSelection: (remaining: string, extracted: string) => void
 }
 
-export function Cell({ cell, index, output, running, onChange, onRun, onDelete, onKindChange, onInspect }: CellProps) {
-  const diagnostics = output?.error?.line ? [{
-    line: output.error.line,
-    column: output.error.column || 1,
-    severity: 'error' as const,
-    message: output.error.message,
-  }] : []
+export function Cell({ cell, index, order, output, running, onChange, onRun, onDelete, onKindChange, onInspect, dragging, dropEdge, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave, showInsertAfter, onAddAfter, onSplitMarkdownSelection }: CellProps) {
+  const resultMatchesSource = output?.source === cell.source
+  const diagnostics = useMemo(() => resultMatchesSource && output?.error?.line ? [{
+      line: output.error.line,
+      ...(output.error.column ? { column: output.error.column } : {}),
+      severity: 'error' as const,
+      message: output.error.message,
+    }] : [], [resultMatchesSource, output?.error?.line, output?.error?.column, output?.error?.message])
 
   return (
-    <article className={`cell ${running ? 'running' : ''}`}>
-      <aside className="cell-gutter">
+    <article
+      className={`cell ${running ? 'running' : ''} ${dragging ? 'dragging' : ''} ${dropEdge ? `drop-${dropEdge}` : ''}`}
+      style={{ order }}
+      onDragOver={(event) => {
+        if (dragging) return
+        event.preventDefault()
+        event.dataTransfer.dropEffect = 'move'
+        const bounds = event.currentTarget.getBoundingClientRect()
+        onDragOver(event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after')
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node)) onDragLeave()
+      }}
+      onDrop={(event) => {
+        event.preventDefault()
+        const bounds = event.currentTarget.getBoundingClientRect()
+        const edge = event.clientY < bounds.top + bounds.height / 2 ? 'before' : 'after'
+        onDrop(edge)
+      }}
+    >
+      <aside
+        className="cell-gutter"
+        draggable
+        onDragStart={(event) => {
+          event.dataTransfer.effectAllowed = 'move'
+          event.dataTransfer.setData('text/x-octave-cell', cell.id)
+          onDragStart()
+        }}
+        onDragEnd={onDragEnd}
+      >
         <GripVertical size={14} />
         <span>{index + 1}</span>
       </aside>
@@ -42,7 +83,7 @@ export function Cell({ cell, index, output, running, onChange, onRun, onDelete, 
         {cell.kind === 'code' ? (
           <OctaveEditor value={cell.source} onChange={onChange} onRun={onRun} diagnostics={diagnostics} onInspect={onInspect} />
         ) : (
-          <MarkdownEditor value={cell.source} onChange={onChange} />
+          <MarkdownEditor value={cell.source} onChange={onChange} onSplitSelection={onSplitMarkdownSelection} />
         )}
         {output && (output.stdout || output.stderr || output.error) && (
           <div className={`cell-output ${output.error ? 'error' : ''}`}>
@@ -53,6 +94,12 @@ export function Cell({ cell, index, output, running, onChange, onRun, onDelete, 
           </div>
         )}
       </div>
+      {showInsertAfter && (
+        <div className="cell-insert">
+          <button onClick={() => onAddAfter('code')} title="Insertar código" aria-label="Insertar código"><Plus size={11} /><Braces size={13} /></button>
+          <button onClick={() => onAddAfter('markdown')} title="Insertar Markdown" aria-label="Insertar Markdown"><Plus size={11} /><Text size={13} /></button>
+        </div>
+      )}
     </article>
   )
 }

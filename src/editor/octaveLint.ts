@@ -117,16 +117,6 @@ export function lintOctave(source: string): OctaveDiagnostic[] {
       blockCommentStart = undefined;
     }
 
-    const trailing = original.match(/[ \t]+$/);
-    if (trailing && original.trim()) {
-      diagnostics.push({
-        line: lineNumber,
-        column: original.length - trailing[0].length + 1,
-        severity: 'info',
-        message: 'Espacio en blanco al final de la línea.',
-      });
-    }
-
     const doubleSeparator = line.match(/[,;]\s*[,;]/);
     if (doubleSeparator) {
       diagnostics.push({
@@ -210,8 +200,8 @@ export function lintOctave(source: string): OctaveDiagnostic[] {
   blocks.forEach((open) => diagnostics.push({
     line: open.line,
     column: open.column,
-    severity: 'warning',
-    message: `Bloque «${open.kind}» sin cerrar; se esperaba «${openerToCloser[open.kind]}» o «end».`,
+    severity: 'error',
+    message: `Bloque «${open.kind}» sin cerrar. Falta «${openerToCloser[open.kind]}» o «end».`,
   }));
 
   if (inBlockComment && blockCommentStart) diagnostics.push({
@@ -238,12 +228,22 @@ export function toMonacoMarkers(
   return diagnostics.map((diagnostic) => {
     const line = Math.min(Math.max(1, diagnostic.line), model.getLineCount());
     const maxColumn = model.getLineMaxColumn(line);
-    const column = Math.min(Math.max(1, diagnostic.column ?? 1), maxColumn);
+    const content = model.getLineContent(line);
+    const firstContentColumn = Math.max(1, content.search(/\S/) + 1);
+    const column = Math.min(
+      Math.max(1, diagnostic.column ?? firstContentColumn),
+      maxColumn,
+    );
+    const token = content.slice(column - 1).match(/^[A-Za-z_]\w*|^\S/);
+    const endColumn = Math.min(maxColumn, column + Math.max(1, token?.[0].length ?? 1));
     return {
       startLineNumber: line,
       endLineNumber: line,
       startColumn: column,
-      endColumn: Math.min(maxColumn, column + 1),
+      // Keep the squiggle on the relevant token. Extending a marker to the end
+      // of the line makes trailing whitespace look like the actual error and
+      // leaves the diagnostic hover far away from its cause.
+      endColumn,
       severity: severityValue(monaco, diagnostic.severity),
       message: diagnostic.message,
       source: 'Octave',

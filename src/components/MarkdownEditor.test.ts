@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { defaultMarkdownSerializer, schema } from 'prosemirror-markdown'
 import { EditorState, TextSelection } from 'prosemirror-state'
 
-import { markdownBlockShortcut, markdownHeadingOnEnter } from './MarkdownEditor'
+import {
+  markdownBlockShortcut,
+  markdownHeadingOnEnter,
+  plainTextPasteSlice,
+} from '../editor/markdownEditing'
 
 function typeBlockPrefix(prefix: string) {
   const doc = schema.node('doc', null, [
@@ -52,6 +56,59 @@ describe('MarkdownEditor block shortcuts', () => {
     expect(next.doc.child(0).textContent).toBe('Hola')
     expect(next.doc.child(1).type).toBe(schema.nodes.paragraph)
     expect(next.selection.$from.parent.type).toBe(schema.nodes.paragraph)
+  })
+})
+
+describe('MarkdownEditor PDF plain-text paste', () => {
+  it('preserves blank-line paragraphs and visual line breaks', () => {
+    const slice = plainTextPasteSlice('Primera línea\nsegunda línea\n\nOtro párrafo')
+    const doc = schema.nodes.doc.create(null, slice.content)
+
+    expect(doc.childCount).toBe(2)
+    expect(doc.child(0).type).toBe(schema.nodes.paragraph)
+    expect(doc.child(0).child(1).type).toBe(schema.nodes.hard_break)
+    expect(doc.child(1).textContent).toBe('Otro párrafo')
+    expect(defaultMarkdownSerializer.serialize(doc)).toBe(
+      'Primera línea\\\nsegunda línea\n\nOtro párrafo',
+    )
+  })
+
+  it('recognizes PDF bullet glyphs and keeps wrapped item lines', () => {
+    const slice = plainTextPasteSlice('• Primer punto\ncontinuación\n◦ Segundo punto')
+    const doc = schema.nodes.doc.create(null, slice.content)
+    const list = doc.firstChild!
+
+    expect(list.type).toBe(schema.nodes.bullet_list)
+    expect(list.childCount).toBe(2)
+    expect(list.child(0).textContent).toBe('Primer puntocontinuación')
+    expect(list.child(0).firstChild?.child(1).type).toBe(schema.nodes.hard_break)
+    expect(list.child(1).textContent).toBe('Segundo punto')
+  })
+
+  it('recognizes numbered lists and their starting number', () => {
+    const slice = plainTextPasteSlice('3. Tercero\n4) Cuarto')
+    const doc = schema.nodes.doc.create(null, slice.content)
+    const list = doc.firstChild!
+
+    expect(list.type).toBe(schema.nodes.ordered_list)
+    expect(list.attrs.order).toBe(3)
+    expect(list.childCount).toBe(2)
+  })
+
+  it('only creates headings from explicit Markdown heading markers', () => {
+    const slice = plainTextPasteSlice('# Encabezado\nTexto normal')
+    const doc = schema.nodes.doc.create(null, slice.content)
+
+    expect(doc.child(0).type).toBe(schema.nodes.heading)
+    expect(doc.child(0).attrs.level).toBe(1)
+    expect(doc.child(1).type).toBe(schema.nodes.paragraph)
+  })
+
+  it('keeps UTF-8 characters intact', () => {
+    const slice = plainTextPasteSlice('▪ Álgebra y eliminación\nseñal: ñ, π, λ')
+    const doc = schema.nodes.doc.create(null, slice.content)
+
+    expect(doc.textContent).toBe('Álgebra y eliminaciónseñal: ñ, π, λ')
   })
 })
 

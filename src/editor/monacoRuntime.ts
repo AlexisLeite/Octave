@@ -11,7 +11,10 @@ let runtimePromise: Promise<void> | undefined;
 
 /** Keep Monaco and its editor worker local; @monaco-editor/react otherwise defaults to a CDN. */
 export function configureLocalMonaco(): Promise<void> {
-  runtimePromise ??= import('monaco-editor/esm/vs/editor/editor.api').then((monaco) => {
+  runtimePromise ??= Promise.all([
+    import('monaco-editor/esm/vs/editor/editor.api'),
+    import('monaco-editor/esm/vs/editor/contrib/wordOperations/browser/wordOperations.js'),
+  ]).then(([monaco]) => {
     loader.config({ monaco });
     if (typeof self !== 'undefined') {
       (self as WorkerScope).MonacoEnvironment = {

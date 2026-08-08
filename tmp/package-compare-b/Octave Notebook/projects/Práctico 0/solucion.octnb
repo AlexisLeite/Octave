@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "id": "e3d2512c-b551-48ca-9cb0-cb6ea283ec8f",
+  "title": "solucion",
+  "cells": [
+    {
+      "id": "47168f9d-249b-4c39-820b-1f49e8e9b917",
+      "kind": "markdown",
+      "source": "# Octave\n\nLos siguientes ejercicios están orientados especialmente a aquellos estudiantes que no tengan experiencia previa en Octave."
+    },
+    {
+      "id": "9ffbfa70-fd26-41c6-917f-bb26c317a17d",
+      "kind": "markdown",
+      "source": "## Ejercicio 1 (Funciones)\n\n**a)** Escribir una función llamada `norma` que reciba un vector $v$ y devuelva la norma euclídea de $v$.\n\n**b)** Escribir una función llamada `sustitucion` que reciba como parámetros una matriz $A$, un vector fila $v$ del mismo largo que la cantidad de columnas de $A$, y un número natural $n$, y devuelva la matriz $A$ luego de sustituir la fila $n$ por el vector $v$.\n\n**c)** Escribir una función llamada `intercambio` que reciba como parámetros una matriz $A$ y naturales $n$ y $m$, y devuelva la matriz $A$ luego de intercambiar las filas $n$ y $m$."
+    },
+    {
+      "id": "dd33a0ad-d137-496a-963d-d803a8bb1753",
+      "kind": "code",
+      "source": "function norma = norma(v)\r\n  % La norma se calcula como la raíz de la suma del cuadrado de los componentes del vector\r\n  norma = 1\r\nendfunction\r\n\r\ndisp(norma(3))"
+    },
+    {
+      "id": "6863576d-66ce-4b2d-8a24-4e516767b909",
+      "kind": "markdown",
+      "source": "## Ejercicio 2 (If)\n\n**a)** Escribir una función `maximo` que reciba dos reales $a$ y $b$, y devuelva el máximo entre ellos.\n\n**b)** Escribir una función `signo` que reciba un real $x$ y devuelva $1$ si $x > 0$, $0$ si $x = 0$ y $-1$ si $x < 0$.\n\n**c)** Escribir una función `esPar` que reciba un natural $n$ y devuelva $1$ si $n$ es par, o $0$ si es impar.\n\n> **Sugerencia:** la función `mod(n, m)` devuelve el resto de la división entera de $n$ entre $m$."
+    },
+    {
+      "id": "21ef9cf4-f91e-42ef-9076-e54d19fd04c9",
+      "kind": "markdown",
+      "source": "## Ejercicio 3 (For)\n\n**a)** Modificar la función `maximo` del ejercicio anterior para que reciba una matriz $A$ y devuelva el elemento máximo de $A$.\n\n**b)** Escribir una función `serie` que reciba una función $f$ y un natural $N$, y devuelva la suma parcial\n\n$$\n\\sum_{n=0}^{N} f(n).\n$$"
+    },
+    {
+      "id": "709df531-65a3-4868-8ef5-74492b04ec88",
+      "kind": "markdown",
+      "source": "## Ejercicio 4 (While)\n\nEscribir una función `serie2` que reciba una función decreciente $f$ y un real positivo $\\varepsilon$, y devuelva la suma parcial\n\n$$\n\\sum_{n=0}^{N} f(n),\n$$\n\ndonde $N$ es el primer natural tal que $f(N) < \\varepsilon$."
+    },
+    {
+      "id": "cb9a58f3-9967-4f96-b963-2da270581e74",
+      "kind": "markdown",
+      "source": "## Ejercicio 5 (Fibonacci)\n\nLa sucesión de Fibonacci se define de la siguiente forma:\n\n$$\nf_0 = 1, \\qquad f_1 = 1,\n$$\n\ny\n\n$$\nf_{n+1} = f_n + f_{n-1} \\qquad \\forall n \\ge 1.\n$$\n\n**a)** Escribir una función `fibonacci` que reciba un número natural $n$ y devuelva un vector conteniendo los primeros $n+1$ números de la sucesión de Fibonacci.\n\n**b)** Demostrar que, cuando $n \\to \\infty$,\n\n$$\n\\frac{f_n}{f_{n+1}} \\to \\varphi = \\frac{1 + \\sqrt{5}}{2},\n$$\n\nel llamado **número áureo**.\n\nUsar la función `fibonacci` para calcular, en forma vectorizada, los cocientes\n\n$$\n\\frac{f_0}{f_1}, \\ldots, \\frac{f_{19}}{f_{20}}.\n$$"
+    },
+    {
+      "id": "289d4202-31d3-4572-a35c-1c00cab45e5d",
+      "kind": "markdown",
+      "source": "## Ejercicio 6 (Collatz)\n\nLa conjetura de Collatz es uno de los problemas sin resolver más famosos en matemática, y consiste en preguntarse si la repetición de dos operaciones aritméticas simples eventualmente transforma cualquier número natural en $1$.\n\nSe considera la función $f : \\mathbb{N} \\to \\mathbb{N}$,\n\n$$\nf(m) =\n\\begin{cases}\n\\dfrac{m}{2}, & \\text{si } m \\text{ es par}, \\\\\n3m + 1, & \\text{si } m \\text{ es impar},\n\\end{cases}\n$$\n\ny se define una sucesión mediante\n\n$$\na_0 = m\n$$\n\n(con $m$ un número a elegir, al que llamaremos **semilla**) y\n\n$$\na_{n+1} = f(a_n) \\qquad \\forall n \\ge 0.\n$$\n\n**a)** Notar que si se toma la semilla $m = 1$, se obtiene el ciclo\n\n$$\n1 \\mapsto 4 \\mapsto 2 \\mapsto 1 \\mapsto \\cdots\n$$\n\n**b)** Escribir una función `collatz` que reciba un número natural $m$ y devuelva un vector conteniendo los elementos de la sucesión $\\{a_n\\}$ obtenida al usar $m$ como semilla hasta que se llegue al valor $1$.\n\nPara evitar que el programa corra indefinidamente, establecer una cota superior a la cantidad de veces que se puede aplicar $f$.\n\n**c)** Mostrar que usando como semilla cualquier valor de $m$ menor que $1000$ se llega al $1$ en menos de $200$ pasos.\n\n¿Para qué valor $m < 1000$ de semilla es para el que se tiene mayor cantidad de pasos antes de llegar al $1$?"
+    },
+    {
+      "id": "74c9b877-c099-4a99-948b-328e63563f52",
+      "kind": "markdown",
+      "source": "# Repaso\n\nLos siguientes ejercicios tocan contenidos cubiertos en cursos que son previaturas de éste.\n\n## Ejercicio 7 (Taylor en una variable, CDIV)\n\nPara cada una de las siguientes funciones, hallar el polinomio de Taylor en el punto $x_0$ y del orden $n$ indicado:\n\n$$\n\\begin{aligned}\nf(x) &= \\frac{1}{1+x}, & x_0 &= 0, & n &= 3, \\\\\nf(x) &= \\cos(x), & x_0 &= \\frac{\\pi}{2}, & n &= 4, \\\\\nf(x) &= e^x, & x_0 &= 0, & n &\\in \\mathbb{N}, \\\\\nf(x) &= 1 - 3x + x^5, & x_0 &= \\frac{1}{7}, & n &= 23.\n\\end{aligned}\n$$"
+    },
+    {
+      "id": "cf7cb9be-b5f9-4148-b0f3-886b6f2087d5",
+      "kind": "markdown",
+      "source": "## Ejercicio 8 (Taylor en varias variables, CDIVV)\n\nPara cada una de las siguientes funciones, hallar el polinomio de Taylor en el punto $(x_0, y_0)$ y del orden $n$ indicado:\n\n$$\n\\begin{aligned}\nf(x,y) &= xy, & (x_0,y_0) &= (1,1), & n &= 2, \\\\\nf(x,y) &= e^x, & (x_0,y_0) &= (0,8), & n &= 4.\n\\end{aligned}\n$$"
+    },
+    {
+      "id": "e145305a-6612-4cd1-99d3-f1b5cf7c9ab3",
+      "kind": "markdown",
+      "source": "## Ejercicio 9 (Escalerización gaussiana, GAL 1)\n\nResolver los siguientes sistemas de ecuaciones usando el método de escalerización gaussiana:\n\n$$\n\\left\\{\n\\begin{aligned}\n-x + y - z &= 1, \\\\\n4x + 2y - z &= 5, \\\\\nx + y + z &= 5.\n\\end{aligned}\n\\right.\n$$\n\n$$\n\\left\\{\n\\begin{aligned}\n2x + y + z &= 3, \\\\\nx - y - 2z &= 3, \\\\\ny - 5z &= -1.\n\\end{aligned}\n\\right.\n$$\n\n$$\n\\left\\{\n\\begin{aligned}\nx + 2y - z &= 1, \\\\\n2x + 4y - 2z &= 0.\n\\end{aligned}\n\\right.\n$$"
+    },
+    {
+      "id": "469eafad-3497-4ca6-b4e4-ee67d7f8ffcd",
+      "kind": "markdown",
+      "source": "## Ejercicio 10 (Método de Gram-Schmidt, GAL 2)\n\nAplicar el método de ortonormalización de Gram-Schmidt a las columnas de la matriz\n\n$$\nA = \\begin{bmatrix}\n2 & 2 & 0 \\\\\n3 & -1 & 0 \\\\\n0 & -2 & 1\n\\end{bmatrix},\n$$\n\ny hallar matrices $Q$ ortogonal y $R$ triangular superior tales que\n\n$$\nA = QR.\n$$"
+    },
+    {
+      "id": "9a4bc901-cb97-4661-82e1-8c06cddc5cfd",
+      "kind": "markdown",
+      "source": "**Ejercicio 3** (For)**.**\n\na) Modificar la funci´on maximo del ejercicio anterior para que reciba una matriz A y devuelva el\\\nelemento m´aximo de A.\n\nb) Escribir una funci´PNon serie que reciba una funci´on f y un natural N y devuelva la suma parcial\\\nn=0 f (n)."
+    }
+  ],
+  "outputs": {
+    "dd33a0ad-d137-496a-963d-d803a8bb1753": {
+      "cellId": "dd33a0ad-d137-496a-963d-d803a8bb1753",
+      "stdout": "norma = 1\n1\n",
+      "stderr": "",
+      "durationMs": 63.960299999976996,
+      "error": null,
+      "source": "function norma = norma(v)\r\n  % La norma se calcula la raíz del como la suma del cuadrado de los componentes del vector\r\n  norma = 1\r\nendfunction\r\n\r\ndisp(norma(3))"
+    }
+  }
+}

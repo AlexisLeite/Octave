@@ -1,0 +1,200 @@
+.octave-pdf-viewer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+  background: var(--bg, #181818);
+  color: var(--text, #e6e6e6);
+}
+
+.octave-pdf-viewer.active {
+  z-index: 3;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.octave-pdf-scroll {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
+  outline: none;
+}
+
+.octave-pdf-scroll:focus-visible {
+  box-shadow: inset 0 0 0 1px var(--accent, #75beff);
+}
+
+.octave-pdf-pages {
+  width: max-content;
+  min-width: 100%;
+  min-height: 100%;
+  padding: 20px 16px 54px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.octave-pdf-page {
+  position: relative;
+  flex: 0 0 auto;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 18%);
+  color-scheme: only light;
+}
+
+.octave-pdf-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+}
+
+.octave-pdf-text-layer {
+  --min-font-size: 1;
+  --text-scale-factor: calc(var(--total-scale-factor) * var(--min-font-size));
+  --min-font-size-inv: calc(1 / var(--min-font-size));
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: clip;
+  opacity: 1;
+  line-height: 1;
+  text-align: initial;
+  letter-spacing: normal;
+  word-spacing: normal;
+  transform-origin: 0 0;
+  -webkit-text-size-adjust: none;
+  text-size-adjust: none;
+  forced-color-adjust: none;
+}
+
+.octave-pdf-text-layer :is(span, br) {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  cursor: text;
+  transform-origin: 0 0;
+  user-select: text;
+}
+
+.octave-pdf-text-layer > :not(.markedContent),
+.octave-pdf-text-layer .markedContent span:not(.markedContent) {
+  --font-height: 0;
+  --scale-x: 1;
+  --rotate: 0deg;
+  z-index: 1;
+  font-size: calc(var(--text-scale-factor) * var(--font-height));
+  transform: rotate(var(--rotate)) scaleX(var(--scale-x)) scale(var(--min-font-size-inv));
+}
+
+.octave-pdf-text-layer .octave-pdf-selection-run::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: calc(-1 * var(--pdf-hit-left, 0px));
+  right: calc(-1 * var(--pdf-hit-right, 0px));
+  top: calc(-1 * var(--pdf-hit-top, 0px));
+  bottom: calc(-1 * var(--pdf-hit-bottom, 0px));
+  background: transparent;
+  pointer-events: auto;
+}
+
+.octave-pdf-text-layer .markedContent {
+  display: contents;
+}
+
+.octave-pdf-text-layer ::selection {
+  color: transparent;
+  background: color-mix(in srgb, Highlight 55%, transparent);
+}
+
+.octave-pdf-text-layer br::selection {
+  background: transparent;
+}
+
+.octave-pdf-end-of-content {
+  position: absolute;
+  inset: 100% 0 0;
+  user-select: none;
+  pointer-events: none;
+}
+
+.octave-pdf-controls {
+  position: absolute;
+  z-index: 5;
+  right: 18px;
+  bottom: 16px;
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border-strong, #505050);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--surface-raised, #252526) 92%, transparent);
+  box-shadow: 0 4px 18px rgb(0 0 0 / 20%);
+  backdrop-filter: blur(8px);
+}
+
+.octave-pdf-controls button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text, #e6e6e6);
+  cursor: pointer;
+}
+
+.octave-pdf-controls button:hover {
+  background: var(--selection, #2a2d2e);
+}
+
+.octave-pdf-controls button:focus-visible {
+  outline: 1px solid var(--accent, #75beff);
+  outline-offset: -1px;
+}
+
+.octave-pdf-loading {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px;
+  border: 2px solid var(--border-strong, #505050);
+  border-top-color: var(--accent, #75beff);
+  border-radius: 50%;
+  animation: octave-pdf-spin 0.75s linear infinite;
+  pointer-events: none;
+}
+
+.octave-pdf-error {
+  position: absolute;
+  z-index: 4;
+  left: 50%;
+  top: 50%;
+  max-width: min(520px, calc(100% - 48px));
+  padding: 9px 12px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--danger, #f48771);
+  border-radius: 6px;
+  background: var(--surface-raised, #252526);
+  color: var(--danger, #f48771);
+  font-size: 12px;
+}
+
+@keyframes octave-pdf-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .octave-pdf-loading { animation-duration: 2s; }
+}

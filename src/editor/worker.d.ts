@@ -5,3 +5,4 @@ declare module '*?worker' {
   export default WorkerFactory;
 }
 
+declare module 'monaco-editor/esm/vs/editor/contrib/wordOperations/browser/wordOperations.js';

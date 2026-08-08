@@ -123,7 +123,9 @@ export function OctaveEditor({
 
   useEffect(() => {
     updateMarkers();
-  }, [value, updateMarkers]);
+    const firstError = diagnostics.find((diagnostic) => diagnostic.severity === 'error');
+    if (firstError) editorRef.current?.revealLineInCenterIfOutsideViewport(firstError.line);
+  }, [value, diagnostics, updateMarkers]);
 
   useEffect(() => {
     let active = true;
@@ -182,10 +184,12 @@ export function OctaveEditor({
         foldingHighlight: false,
         fontFamily: 'var(--font-mono, ui-monospace, SFMono-Regular, Consolas, monospace)',
         fontLigatures: true,
-        fontSize: 13,
+        fontSize: 14,
+        lineHeight: 22,
         glyphMargin: false,
         guides: { bracketPairs: true, indentation: false },
-        hover: { enabled: Boolean(onInspect), delay: 300 },
+        // Marker diagnostics use Monaco's hover even when runtime inspection is unavailable.
+        hover: { enabled: true, delay: 300 },
         lineDecorationsWidth: 8,
         lineNumbersMinChars: 3,
         minimap: { enabled: false },
@@ -194,12 +198,16 @@ export function OctaveEditor({
         padding: { top: 10, bottom: 10 },
         readOnly,
         renderLineHighlight: 'gutter',
+        renderValidationDecorations: 'on',
         roundedSelection: false,
         scrollbar: { alwaysConsumeMouseWheel: false, verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
         scrollBeyondLastLine: false,
         smoothScrolling: true,
         snippetSuggestions: 'top',
         tabSize: 2,
+        // Monaco's invisible-character highlighter can render ordinary-looking
+        // whitespace as a warning. Whitespace is intentionally not a lint rule.
+        unicodeHighlight: { invisibleCharacters: false },
         wordWrap: 'on',
       }}
     />

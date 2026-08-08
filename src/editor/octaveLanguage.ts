@@ -89,7 +89,7 @@ const builtins = [
   'isfinite', 'isinf', 'islogical', 'ismatrix', 'isnan', 'isnumeric', 'isreal', 'isscalar',
   'isvector', 'legend', 'length', 'linspace', 'load', 'log', 'log10', 'log2', 'logical',
   'logspace', 'lu', 'max', 'mean', 'mesh', 'meshgrid', 'min', 'mod', 'ndims', 'nnz',
-  'norm', 'numel', 'ones', 'pinv', 'plot', 'plot3', 'polyfit', 'polyval', 'printf', 'prod',
+  'norm', 'numel', 'ones', 'pinv', 'plot', 'plot3', 'polyfit', 'polyval', 'print', 'printf', 'prod',
   'qr', 'rand', 'randi', 'randn', 'rank', 'real', 'repmat', 'reshape', 'roots', 'round',
   'save', 'semilogx', 'semilogy', 'sin', 'size', 'sort', 'sparse', 'sprintf', 'sqrt',
   'std', 'stem', 'str2double', 'strcmp', 'strcmpi', 'strfind', 'struct', 'subplot', 'sum',
@@ -170,7 +170,9 @@ const monarchLanguage: languages.IMonarchLanguage = {
       [/[a-zA-Z_]\w*/, {
         cases: {
           '@keywords': 'keyword',
-          '@builtins': 'type.identifier',
+          // Built-ins are ordinary callable symbols. Keep them visually distinct
+          // without using a token class that can be mistaken for diagnostics.
+          '@builtins': 'support.function',
           '@constants': 'constant',
           '@default': 'identifier',
         },
@@ -324,89 +326,115 @@ function registerInspectionProvider(monaco: Monaco): IDisposable {
 
 /** Register Octave once for each Monaco runtime, including across Vite HMR reloads. */
 export function registerOctaveLanguage(monaco: Monaco): void {
-  if (registry.instances.has(monaco as object)) return;
-  registry.instances.add(monaco as object);
+  const isNewRuntime = !registry.instances.has(monaco as object);
+  if (isNewRuntime) registry.instances.add(monaco as object);
 
-  if (!monaco.languages.getLanguages().some((language) => language.id === 'octave')) {
-    monaco.languages.register({
-      id: 'octave',
-      aliases: ['Octave', 'GNU Octave'],
-      extensions: ['.m'],
-      mimetypes: ['text/x-octave'],
-    });
+  if (isNewRuntime) {
+    if (!monaco.languages.getLanguages().some((language) => language.id === 'octave')) {
+      monaco.languages.register({
+        id: 'octave',
+        aliases: ['Octave', 'GNU Octave'],
+        extensions: ['.m'],
+        mimetypes: ['text/x-octave'],
+      });
+    }
+    monaco.languages.setLanguageConfiguration('octave', languageConfiguration);
+    monaco.languages.setMonarchTokensProvider('octave', monarchLanguage);
   }
-  monaco.languages.setLanguageConfiguration('octave', languageConfiguration);
-  monaco.languages.setMonarchTokensProvider('octave', monarchLanguage);
   monaco.editor.defineTheme('octave-light', {
     base: 'vs',
     inherit: true,
     rules: [
-      { token: 'comment.octave', foreground: '818A82', fontStyle: 'italic' },
-      { token: 'keyword.octave', foreground: '7A3E72' },
-      { token: 'keyword.operator.octave', foreground: '68716B' },
-      { token: 'type.identifier.octave', foreground: '286B70' },
-      { token: 'constant.octave', foreground: '98601F' },
-      { token: 'number.octave', foreground: '98601F' },
-      { token: 'string.octave', foreground: '4E773D' },
-      { token: 'operator.octave', foreground: '58615B' },
+      { token: 'comment.octave', foreground: '66716D', fontStyle: 'italic' },
+      { token: 'keyword.octave', foreground: '735789' },
+      { token: 'keyword.operator.octave', foreground: '343836' },
+      { token: 'support.function.octave', foreground: '2C6E75' },
+      { token: 'constant.octave', foreground: '795D82' },
+      { token: 'number.octave', foreground: '875B28' },
+      { token: 'string.octave', foreground: '4F6B3A' },
+      { token: 'string.escape.octave', foreground: '725329' },
+      { token: 'string.escape.invalid.octave', foreground: 'B42318' },
+      { token: 'operator.octave', foreground: '343836' },
+      { token: 'delimiter.octave', foreground: '59615E' },
     ],
     colors: {
-      'editor.background': '#FBFCFA',
-      'editor.foreground': '#242A31',
-      'editorLineNumber.foreground': '#AEB5AE',
-      'editorLineNumber.activeForeground': '#788078',
-      'editor.lineHighlightBackground': '#F4F6F3',
-      'editor.selectionBackground': '#DDE7E4',
-      'editor.inactiveSelectionBackground': '#E8ECE8',
-      'editorCursor.foreground': '#376D68',
-      'editorIndentGuide.background1': '#E4E7E3',
-      'editorBracketHighlight.foreground1': '#376D68',
-      'editorBracketHighlight.foreground2': '#7A3E72',
-      'editorBracketHighlight.foreground3': '#98601F',
-      'editorGutter.background': '#FBFCFA',
-      'editorHoverWidget.background': '#FFFFFF',
-      'editorHoverWidget.border': '#CBD0CA',
-      'editorSuggestWidget.background': '#FFFFFF',
-      'editorSuggestWidget.border': '#CBD0CA',
-      'editorSuggestWidget.selectedBackground': '#E4E8E3',
+      'editor.background': '#FAFBFA',
+      'editor.foreground': '#292D2B',
+      'editorLineNumber.foreground': '#7A837F',
+      'editorLineNumber.activeForeground': '#343A37',
+      'editor.lineHighlightBackground': '#F0F3F1',
+      'editor.selectionBackground': '#C9DDE0',
+      'editor.inactiveSelectionBackground': '#E1E9E8',
+      'editorCursor.foreground': '#2C6E75',
+      'editorIndentGuide.background1': '#D9DEDB',
+      'editorIndentGuide.activeBackground1': '#AEB8B3',
+      'editorBracketHighlight.foreground1': '#286C73',
+      'editorBracketHighlight.foreground2': '#72538B',
+      'editorBracketHighlight.foreground3': '#856128',
+      'editorGutter.background': '#FAFBFA',
+      'editorError.foreground': '#B42318',
+      'editorError.border': '#00000000',
+      'editorWarning.foreground': '#92610F',
+      'editorInfo.foreground': '#2C6E75',
+      'editorHoverWidget.background': '#FAFBFA',
+      'editorHoverWidget.foreground': '#292D2B',
+      'editorHoverWidget.border': '#BEC7C2',
+      'editorSuggestWidget.background': '#FAFBFA',
+      'editorSuggestWidget.foreground': '#292D2B',
+      'editorSuggestWidget.border': '#BEC7C2',
+      'editorSuggestWidget.selectedBackground': '#DDE9E6',
+      'editorWidget.border': '#BEC7C2',
     },
   });
   monaco.editor.defineTheme('octave-dark', {
     base: 'vs-dark',
     inherit: true,
     rules: [
-      { token: 'comment.octave', foreground: '7F8981', fontStyle: 'italic' },
-      { token: 'keyword.octave', foreground: 'D59BCB' },
-      { token: 'keyword.operator.octave', foreground: 'AAB2AC' },
-      { token: 'type.identifier.octave', foreground: '80B9B5' },
-      { token: 'constant.octave', foreground: 'D6AD72' },
-      { token: 'number.octave', foreground: 'D6AD72' },
-      { token: 'string.octave', foreground: '9FBE88' },
-      { token: 'operator.octave', foreground: 'AAB2AC' },
+      { token: 'comment.octave', foreground: '8B9691', fontStyle: 'italic' },
+      { token: 'keyword.octave', foreground: 'C1A7D8' },
+      { token: 'keyword.operator.octave', foreground: 'CDD2CF' },
+      { token: 'support.function.octave', foreground: '8DBBC0' },
+      { token: 'constant.octave', foreground: 'C0A4C7' },
+      { token: 'number.octave', foreground: 'D1AE78' },
+      { token: 'string.octave', foreground: 'A9BF8D' },
+      { token: 'string.escape.octave', foreground: 'D0B77F' },
+      { token: 'string.escape.invalid.octave', foreground: 'FF7B72' },
+      { token: 'operator.octave', foreground: 'CDD2CF' },
+      { token: 'delimiter.octave', foreground: 'AAB2AE' },
     ],
     colors: {
-      'editor.background': '#202422',
-      'editor.foreground': '#D8DCD7',
-      'editorLineNumber.foreground': '#626B64',
-      'editorLineNumber.activeForeground': '#929B94',
-      'editor.lineHighlightBackground': '#252A27',
-      'editor.selectionBackground': '#31514C',
-      'editor.inactiveSelectionBackground': '#293A36',
-      'editorCursor.foreground': '#71AAA4',
-      'editorIndentGuide.background1': '#303632',
-      'editorBracketHighlight.foreground1': '#71AAA4',
-      'editorBracketHighlight.foreground2': '#D59BCB',
-      'editorBracketHighlight.foreground3': '#D6AD72',
-      'editorGutter.background': '#202422',
-      'editorHoverWidget.background': '#252A27',
-      'editorHoverWidget.border': '#424943',
-      'editorSuggestWidget.background': '#252A27',
-      'editorSuggestWidget.border': '#424943',
-      'editorSuggestWidget.selectedBackground': '#303632',
+      'editor.background': '#191C1B',
+      'editor.foreground': '#DDE2DF',
+      'editorLineNumber.foreground': '#747E79',
+      'editorLineNumber.activeForeground': '#C3CBC7',
+      'editor.lineHighlightBackground': '#212522',
+      'editor.selectionBackground': '#31565B',
+      'editor.inactiveSelectionBackground': '#293D3E',
+      'editorCursor.foreground': '#9BC9CE',
+      'editorIndentGuide.background1': '#333A36',
+      'editorIndentGuide.activeBackground1': '#59645E',
+      'editorBracketHighlight.foreground1': '#83B6BC',
+      'editorBracketHighlight.foreground2': '#B59ACD',
+      'editorBracketHighlight.foreground3': '#C5A66F',
+      'editorGutter.background': '#191C1B',
+      'editorError.foreground': '#FF7B72',
+      'editorError.border': '#00000000',
+      'editorWarning.foreground': '#D8B16B',
+      'editorInfo.foreground': '#8DBBC0',
+      'editorHoverWidget.background': '#222624',
+      'editorHoverWidget.foreground': '#DDE2DF',
+      'editorHoverWidget.border': '#47504B',
+      'editorSuggestWidget.background': '#222624',
+      'editorSuggestWidget.foreground': '#DDE2DF',
+      'editorSuggestWidget.border': '#47504B',
+      'editorSuggestWidget.selectedBackground': '#304642',
+      'editorWidget.border': '#47504B',
     },
   });
-  registerCompletionProvider(monaco);
-  registerInspectionProvider(monaco);
+  if (isNewRuntime) {
+    registerCompletionProvider(monaco);
+    registerInspectionProvider(monaco);
+  }
 }
 
 export function bindOctaveInspector(
