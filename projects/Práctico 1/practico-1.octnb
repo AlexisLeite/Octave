@@ -26,7 +26,7 @@
     {
       "id": "0391e83f-813d-46ef-b2d1-f0dd359dfadd",
       "kind": "code",
-      "source": "x = 1;\r\ni = 1;\r\n\r\nfor e = 2:100\r\n  k = 2.0;\r\n\r\n  while k > 1\r\n    while isfinite(x * k)\r\n      x *= k;\r\n      i++;\r\n    end\r\n\r\n    k -= 0.1;\r\n  end\r\nend\r\n\r\nfor k = 2.0:-0.1:1.1\r\n  while isfinite(x * k)\r\n    x *= k;\r\n    i++;\r\n  end\r\nend\r\n\r\nwhile isfinite(x + eM)\r\n  x += eM;\r\n  i++;\r\nend\r\n\r\nheading(\"x\", x);\r\nheading(\"iters\", i);"
+      "source": "x = 1;\r\ni = 1;\r\nk = 2.0;\r\n\r\nfor e = 2:100\r\n  while k > 1\r\n    while isfinite(x * k)\r\n      x *= k;\r\n      i++;\r\n    end\r\n\r\n    k -= 0.1;\r\n  end\r\nend\r\n\r\nfor k = 2.0:-0.1:1.1\r\n  while isfinite(x * k)\r\n    x *= k;\r\n    i++;\r\n  end\r\nend\r\n\r\nwhile isfinite(x + eM)\r\n  x += eM;\r\n  i++;\r\nend\r\n\r\nheading(\"x\", x);\r\nheading(\"iters\", i);"
     },
     {
       "id": "02b575b5-c84c-4c17-90a7-76fc7a3c2d40",
@@ -199,7 +199,7 @@
       "cellId": "42d63256-ab34-4ff3-ae06-cf93d161c9bf",
       "stdout": "em\n  2.2204e-16\n\niters\n  54",
       "stderr": "",
-      "durationMs": 46.88449999992736,
+      "durationMs": 53.408400000073016,
       "error": null,
       "source": "% Voy a tratar eM como el valor mínimo que cumple que eM > 0 y 1 + eM > 1.\r\n\r\ni = 2;\r\neM = 1;\r\n\r\ndo\r\n  eMcurr = 1 / 2 ^ i++;\r\n\r\n  if (1 + eMcurr) > 1\r\n    eM = eMcurr;\r\n  else\r\n    break;\r\n  end\r\nuntil false;\r\n\r\nheading(\"em\", eM);\r\nheading(\"iters\", i);"
     },
