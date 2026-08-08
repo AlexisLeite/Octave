@@ -63,6 +63,17 @@ describe('lintOctave', () => {
     expect(lintOctave(source)).toEqual([]);
   });
 
+  it('accepts an expression continued across lines inside parentheses', () => {
+    const source = [
+      'resultado = fprintf(',
+      "  'pi = %.15f\\n',",
+      '  pi',
+      ');',
+    ].join('\n');
+
+    expect(lintOctave(source)).toEqual([]);
+  });
+
   it('ignores trailing whitespace', () => {
     expect(lintOctave('x = 1;   \n')).toEqual([]);
   });

@@ -59,17 +59,17 @@ radio = 3;
 area = pi * radio^2;
 e_al_cuadrado = exp(2);
 
-fprintf('pi = %.15f\n', pi);
-fprintf('e  = %.15f\n', e);
-fprintf('Área = %.6f, e^2 = %.6f\n', area, e_al_cuadrado);
+fprintf('pi = %.15f\\n', pi);
+fprintf('e  = %.15f\\n', e);
+fprintf('Área = %.6f, e^2 = %.6f\\n', area, e_al_cuadrado);
 assert(abs(exp(1) - e) <= eps(e));`, 'Pi, Euler y la función exp'),
         markdown(`Las constantes **i** y **j** representan la unidad imaginaria $\sqrt{-1}$. En código reutilizable es más seguro escribir **1i** o **1j**, porque una variable llamada i o j puede ocultar esos nombres. La identidad de Euler conecta las constantes principales: $e^{i\pi}+1=0$, salvo el pequeño error inevitable del punto flotante.`),
         code(`clear;
 z = 3 + 4i;
 identidad_euler = exp(1i * pi) + 1;
 
-fprintf('|z| = %g\n', abs(z));
-fprintf('|exp(i*pi)+1| = %.3e\n', abs(identidad_euler));
+fprintf('|z| = %g\\n', abs(z));
+fprintf('|exp(i*pi)+1| = %.3e\\n', abs(identidad_euler));
 assert(abs(z) == 5);
 assert(abs(identidad_euler) < 1e-14);`, 'Unidad imaginaria e identidad de Euler'),
         markdown(`**Inf** y **-Inf** representan infinitos con signo; **NaN** representa un resultado numérico indefinido. No los compares con ==: usa isinf, isnan e isfinite. Son valores de punto flotante y pueden propagarse por un cálculo, por lo que conviene validarlos en los límites de entrada y salida.`),
@@ -79,7 +79,7 @@ finitos = datos(isfinite(datos));
 
 assert(isequal(finitos, [3, 8]));
 assert(isinf(datos(2)) && isnan(datos(4)));
-fprintf('%d finitos, %d infinitos, %d NaN\n', ...
+fprintf('%d finitos, %d infinitos, %d NaN\\n', ...
   nnz(isfinite(datos)), nnz(isinf(datos)), nnz(isnan(datos)));`, 'Infinito, NaN y validación'),
         markdown(`Octave también expone límites de la representación. **eps(x)** es la separación local entre números representables cerca de x; **realmin** y **realmax** delimitan aproximadamente los valores positivos normalizados de double; **flintmax** es el mayor entero consecutivo representable exactamente. Para enteros tipados existen intmin e intmax.
 
@@ -88,9 +88,9 @@ fprintf('%d finitos, %d infinitos, %d NaN\n', ...
 limites = [realmin, realmax, flintmax];
 error_seno = abs(sin(pi));
 
-fprintf('eps(1) = %.3e\n', eps(1));
-fprintf('realmin = %.3e, realmax = %.3e\n', realmin, realmax);
-fprintf('flintmax = %.0f\n', flintmax);
+fprintf('eps(1) = %.3e\\n', eps(1));
+fprintf('realmin = %.3e, realmax = %.3e\\n', realmin, realmax);
+fprintf('flintmax = %.0f\\n', flintmax);
 assert(error_seno < 2 * eps(pi));
 assert(intmax('int8') == 127 && intmin('int8') == -128);`, 'Precisión y límites representables'),
       ], [], [

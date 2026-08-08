@@ -64,8 +64,11 @@ describe('octaveHelp', () => {
 
   it('documenta y prioriza las constantes matemáticas y numéricas', () => {
     const constants = findHelpNode(octaveHelp, 'fundamentos-constantes')
+    const firstExample = constants?.blocks.find((block) => block.kind === 'code')
 
     expect(constants?.blocks.filter((block) => block.kind === 'code')).toHaveLength(4)
+    expect(firstExample?.source).toContain("fprintf('pi = %.15f\\n', pi);")
+    expect(firstExample?.source).not.toContain("fprintf('pi = %.15f\n")
     expect(constants?.keywords).toEqual(expect.arrayContaining([
       'e', 'Euler', 'pi', 'Inf', 'NaN', 'eps', 'realmin', 'realmax',
     ]))

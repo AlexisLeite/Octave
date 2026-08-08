@@ -126,7 +126,7 @@
     {
       "id": "e0fd96a0-06f2-432c-9ee3-1242534b52a7",
       "kind": "code",
-      "source": ""
+      "source": "function x = collatz(m)\r\n  mm = m-1;\r\n  if mod(mm, 2) == 0\r\n    x = mm / 2;\r\n  else\r\n    x = 3 * mm + 1;\r\n  end\r\nend\r\n\r\n\r\nsucesivos abiicsuceivossucesivs \r\n\r\nheading(\"Collatz of 1\", collatz(1));"
     },
     {
       "id": "a5a0f5ce-98bf-4998-8544-40567c370cb7",
@@ -247,6 +247,14 @@
       "durationMs": 51.34750000014901,
       "error": null,
       "source": "v = fibonacci(30);\r\n\r\nfunction r = demo(v)\r\n  r = [];\r\n  for i = 2:size(v)(2)\r\n    r(i-1) = v(i) / v(i-1);\r\n  end\r\nend\r\n\r\nheading(\"Calculado\");\r\nfprintf('%.6f  ', demo(v));\r\n\r\nheading(\"\\nEuler\", phi = (1 + sqrt(5)) / 2);"
+    },
+    "e0fd96a0-06f2-432c-9ee3-1242534b52a7": {
+      "cellId": "e0fd96a0-06f2-432c-9ee3-1242534b52a7",
+      "stdout": "Collatz of 1\n  0",
+      "stderr": "",
+      "durationMs": 48.96750000002794,
+      "error": null,
+      "source": "function x = collatz(m)\r\n  mm = m-1;\r\n  if mod(mm, 2) == 0\r\n    x = mm / 2;\r\n  else\r\n    x = 3 * mm + 1;\r\n  end\r\nend\r\n\r\nheading(\"Collatz of 1\", collatz(1));"
     }
   }
 }

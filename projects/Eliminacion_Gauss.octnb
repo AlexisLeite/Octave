@@ -2,7 +2,40 @@
   "version": 1,
   "id": "117a05bb-64fd-4b83-933d-302a4a641e15",
   "title": "Eliminación de Gauss",
-  "outputs": {},
+  "outputs": {
+    "e2da4522-9134-48be-8d79-8abbe44e80ba": {
+      "cellId": "e2da4522-9134-48be-8d79-8abbe44e80ba",
+      "stdout": "Después del pivote 1:\n           10           -2            0           -1           40\n            0          8.6           -3         -0.2           19\n            0           -3            8           -1            3\n            0         -0.2           -1          5.9           21\nDespués del pivote 2:\n           10           -2            0           -1           40\n            0          8.6           -3         -0.2           19\n            0            0       6.9535      -1.0698       9.6279\n            0            0      -1.0698       5.8953       21.442\nDespués del pivote 3:\n           10           -2            0           -1           40\n            0          8.6           -3         -0.2           19\n            0            0       6.9535      -1.0698       9.6279\n            0            0            0       5.7308       22.923",
+      "stderr": "",
+      "durationMs": 43.18309999999474,
+      "error": null,
+      "source": "n = rows(G);\nE = Ab;\n\nfor k = 1:n-1\n  % Pivoteo parcial\n  [pivot_size, relative_row] = max(abs(E(k:n, k)));\n  pivot_row = k + relative_row - 1;\n\n  if pivot_size < eps\n    error('El sistema es singular o está mal condicionado');\n  endif\n\n  if pivot_row != k\n    E([k, pivot_row], :) = E([pivot_row, k], :);\n  endif\n\n  % Eliminación debajo del pivote\n  for row = k+1:n\n    multiplier = E(row, k) / E(k, k);\n    E(row, k:end) = E(row, k:end) - multiplier * E(k, k:end);\n    E(row, k) = 0;\n  endfor\n\n  fprintf('Después del pivote %d:\\n', k);\n  disp(E);\nendfor\n\nU = E(:, 1:n);\nc = E(:, end);"
+    },
+    "dcb135dd-ae29-463a-a449-15553093e47a": {
+      "cellId": "dcb135dd-ae29-463a-a449-15553093e47a",
+      "stdout": "Matriz aumentada inicial [G | i]:\n           10           -2            0           -1           40\n           -2            9           -3            0           11\n            0           -3            8           -1            3\n           -1            0           -1            6           17",
+      "stderr": "",
+      "durationMs": 64.21869999999763,
+      "error": null,
+      "source": "format short g\n\n% G [mS] e i [mA]\nG = [10, -2,  0, -1; ...\n     -2,  9, -3,  0; ...\n      0, -3,  8, -1; ...\n     -1,  0, -1,  6];\ni = [40; 11; 3; 17];\n\nAb = [G, i];\ndisp('Matriz aumentada inicial [G | i]:');\ndisp(Ab);"
+    },
+    "638d9c63-1440-46da-92f4-66c816843a53": {
+      "cellId": "638d9c63-1440-46da-92f4-66c816843a53",
+      "stdout": "Voltajes nodales [V]:\nv1 = 5.000000 V\nv2 = 3.000000 V\nv3 = 2.000000 V\nv4 = 4.000000 V",
+      "stderr": "",
+      "durationMs": 52.920000000012806,
+      "error": null,
+      "source": "v = zeros(n, 1);\n\nfor row = n:-1:1\n  known_part = U(row, row+1:n) * v(row+1:n);\n  v(row) = (c(row) - known_part) / U(row, row);\nendfor\n\ndisp('Voltajes nodales [V]:');\nfor node = 1:n\n  fprintf('v%d = %.6f V\\n', node, v(node));\nendfor"
+    },
+    "f346f0b6-19da-49bb-baae-35fb2cc27841": {
+      "cellId": "f346f0b6-19da-49bb-baae-35fb2cc27841",
+      "stdout": "Norma infinita del residuo: 3.553e-15 mA\nDiferencia respecto a G\\i: 8.882e-16 V\nNúmero de condición de G: 2.862",
+      "stderr": "",
+      "durationMs": 67.73950000002515,
+      "error": null,
+      "source": "residual = G*v - i;\nv_octave = G \\ i;\n\nfprintf('Norma infinita del residuo: %.3e mA\\n', norm(residual, inf));\nfprintf('Diferencia respecto a G\\\\i: %.3e V\\n', norm(v - v_octave, inf));\nfprintf('Número de condición de G: %.3f\\n', cond(G));"
+    }
+  },
   "cells": [
     {
       "id": "83e12b37-c481-4acc-a091-64476ec7b77f",

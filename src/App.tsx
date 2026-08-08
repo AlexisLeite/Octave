@@ -937,6 +937,10 @@ export default function App() {
           <button onClick={() => { setCreating(null); if (selected) setRenamingPath(selected.path) }} disabled={!selected} title="Renombrar" aria-label="Renombrar"><Pencil size={14} /></button>
           <button onClick={deleteSelected} disabled={!selected} title="Eliminar" aria-label="Eliminar"><Trash2 size={14} /></button>
           <span />
+          <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="Cambiar tema" aria-label="Cambiar tema">
+            {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
+          </button>
+          <button onClick={() => setHelpOpen(true)} title="Ayuda · F1" aria-label="Ayuda"><CircleHelp size={15} /></button>
         </footer>
       </aside>
       <div className="splitter" onPointerDown={startResize} />
@@ -963,10 +967,6 @@ export default function App() {
                 <button onClick={() => void saveCurrent(true)} title="Guardar y formatear celda · Ctrl+S" aria-label="Guardar"><Save size={15} /></button>
                 <button onClick={printNotebook} disabled={printing} title="Exportar PDF" aria-label="Exportar PDF"><Printer size={15} /></button>
                 <button onClick={resetNotebookState} title="Reiniciar estado" aria-label="Reiniciar estado"><RotateCcw size={15} /></button>
-                <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} title="Cambiar tema" aria-label="Cambiar tema">
-                  {theme === 'dark' ? <Sun size={15} /> : <Moon size={15} />}
-                </button>
-                <button onClick={() => setHelpOpen(true)} title="Ayuda · F1" aria-label="Ayuda"><CircleHelp size={15} /></button>
                 <button onClick={runAll} title="Ejecutar todo · Ctrl+Shift+Enter" aria-label="Ejecutar todo"><Play size={15} /></button>
               </div>
             </header>
