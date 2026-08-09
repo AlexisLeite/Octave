@@ -2,6 +2,8 @@
 
 IDE local de notebooks para [GNU Octave](https://octave.org/), construido con React, Vite y Node.js. Combina documentos Markdown y celdas de código ejecutables con un contexto persistente por cuaderno, sin enviar el código ni los archivos a un servicio externo.
 
+<img width="1917" height="907" alt="image" src="https://github.com/user-attachments/assets/17814a10-3653-47dd-9719-5764a8fc8e48" />
+
 ## Características
 
 - Explorador de archivos y carpetas respaldado por un directorio `projects/` real.
