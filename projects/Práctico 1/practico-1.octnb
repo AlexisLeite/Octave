@@ -212,7 +212,7 @@
       "cellId": "0391e83f-813d-46ef-b2d1-f0dd359dfadd",
       "stdout": "maximo = 1.7977e+308\nans = 1.7977e+308",
       "stderr": "",
-      "durationMs": 45.53839999996126,
+      "durationMs": 40.17149999993853,
       "error": null,
       "source": "clear;\r\n\r\nx = 1;\r\n\r\n% Encontrar la mayor potencia de 2 finita\r\nwhile isfinite(x * 2)\r\n  x *= 2;\r\nendwhile\r\n\r\n% Buscar el mayor factor entre 1 y 2\r\nlo = 1;\r\nhi = 2;\r\n\r\nfor i = 1:60\r\n  k = (lo + hi) / 2;\r\n\r\n  if isfinite(x * k)\r\n    lo = k;\r\n  else\r\n    hi = k;\r\n  endif\r\nendfor\r\n\r\nmaximo = x * lo\r\nrealmax"
     },
