@@ -136,8 +136,11 @@ button:disabled { opacity: .35; cursor: default; }
 .pdf-viewer.active { z-index: 3; visibility: visible; pointer-events: auto; }
 
 .cell { position: relative; display: grid; grid-template-columns: 34px minmax(0, 1fr); margin-bottom: 22px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); box-shadow: var(--shadow); transition: border-color .15s ease, box-shadow .15s ease; }
+.cell::after { content: ""; position: absolute; z-index: 4; inset: -1px; border: 1px solid var(--border); border-radius: 8px; pointer-events: none; transition: border-color .15s ease; }
 .cell:focus-within { border-color: var(--border-strong); box-shadow: 0 0 0 1px color-mix(in srgb, var(--border-strong) 45%, transparent); }
+.cell:focus-within::after { border-color: var(--border-strong); }
 .cell.running { border-color: color-mix(in srgb, var(--accent) 65%, var(--border)); }
+.cell.running::after { border-color: color-mix(in srgb, var(--accent) 65%, var(--border)); }
 .cell.dragging { opacity: .42; }
 .cell.drop-before::before, .cell.drop-after::before { content: ""; position: absolute; z-index: 8; left: 26px; right: 8px; height: 2px; border-radius: 2px; background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
 .cell.drop-before::before { top: -8px; }

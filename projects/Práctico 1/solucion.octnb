@@ -1,7 +1,7 @@
 {
   "version": 1,
   "id": "practico-1-punto-flotante-errores",
-  "title": "Práctico 1",
+  "title": "solucion",
   "cells": [
     {
       "id": "p1-intro",
@@ -16,17 +16,12 @@
     {
       "id": "42d63256-ab34-4ff3-ae06-cf93d161c9bf",
       "kind": "code",
-      "source": "% Voy a tratar eM como el valor mínimo que cumple que eM > 0 y 1 + eM > 1.\r\n\r\ni = 2;\r\neM = 1;\r\n\r\ndo\r\n  eMcurr = 1 / 2 ^ i++;\r\n\r\n  if (1 + eMcurr) > 1\r\n    eM = eMcurr;\r\n  else\r\n    break;\r\n  end\r\nuntil false;\r\n\r\nheading(\"em\", eM);\r\nheading(\"iters\", i);"
+      "source": "% Voy a tratar eM como el valor mínimo que cumple que eM > 0 y 1 + eM > 1.\r\n\r\ni = 2;\r\neM = 1;\r\n\r\ndo\r\n  eMcurr = 1 / 2 ^ i++;\r\n\r\n  if (1 + eMcurr) > 1\r\n    eM = eMcurr;\r\n  else\r\n    break;\r\n  end\r\nuntil false;\r\n\r\nheading(\"em\", eM);\r\nheading(\"iters\", i);\r\n\r\nheading(\"Epsilon -- eps\", eps(1))"
     },
     {
       "id": "9e849ee7-fb93-401e-a302-c9fb9b4f1db2",
       "kind": "markdown",
       "source": "b) El mayor número representable."
-    },
-    {
-      "id": "00df51cf-c61b-4016-a486-a5f19a3fd120",
-      "kind": "code",
-      "source": "clear;\r\n\r\nx = 1;\r\n\r\n% Buscar la mayor potencia de 2 representable\r\nwhile isfinite(x * 2)\r\n  x *= 2;\r\nendwhile\r\n\r\n% Afinar multiplicando esa potencia por un factor entre 1 y 2\r\nk = 1;\r\nstep = 0.1;\r\n\r\nfor e = 1:16\r\n  while isfinite(x * (k + step))\r\n    k += step;\r\n  endwhile\r\n\r\n  step /= 10;\r\nendfor\r\n\r\nmaximo = x * k\r\nrealmax"
     },
     {
       "id": "0391e83f-813d-46ef-b2d1-f0dd359dfadd",
@@ -200,18 +195,13 @@
     }
   ],
   "outputs": {
-    "00df51cf-c61b-4016-a486-a5f19a3fd120": {
-      "cellId": "00df51cf-c61b-4016-a486-a5f19a3fd120",
-      "stdout": "",
+    "42d63256-ab34-4ff3-ae06-cf93d161c9bf": {
+      "cellId": "42d63256-ab34-4ff3-ae06-cf93d161c9bf",
+      "stdout": "em\n  2.2204e-16\n\niters\n  54\n\nEpsilon -- eps\n  2.2204e-16",
       "stderr": "",
-      "durationMs": 30004.605200000107,
-      "error": {
-        "message": "Octave execution timed out after 30000 ms; the runtime was terminated",
-        "line": null,
-        "column": null
-      },
-      "timedOut": true,
-      "source": "clear;\r\n\r\nx = 1;\r\n\r\n% Buscar la mayor potencia de 2 representable\r\nwhile isfinite(x * 2)\r\n  x *= 2;\r\nendwhile\r\n\r\n% Afinar multiplicando esa potencia por un factor entre 1 y 2\r\nk = 1;\r\nstep = 0.1;\r\n\r\nfor e = 1:16\r\n  while isfinite(x * (k + step))\r\n    k += step;\r\n  endwhile\r\n\r\n  step /= 10;\r\nendfor\r\n\r\nmaximo = x * k\r\nrealmax"
+      "durationMs": 53.3408000000054,
+      "error": null,
+      "source": "% Voy a tratar eM como el valor mínimo que cumple que eM > 0 y 1 + eM > 1.\r\n\r\ni = 2;\r\neM = 1;\r\n\r\ndo\r\n  eMcurr = 1 / 2 ^ i++;\r\n\r\n  if (1 + eMcurr) > 1\r\n    eM = eMcurr;\r\n  else\r\n    break;\r\n  end\r\nuntil false;\r\n\r\nheading(\"em\", eM);\r\nheading(\"iters\", i);\r\n\r\nheading(\"Epsilon -- eps\", eps(1))"
     }
   }
 }
