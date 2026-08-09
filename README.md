@@ -40,7 +40,7 @@ pnpm dev:raw
 
 La interfaz queda en [http://localhost:5173](http://localhost:5173) y la API de desarrollo en `http://127.0.0.1:4311`. Vite redirige `/api` a ese puerto.
 
-`pnpm dev` ofrece el mismo entorno registrado en Console Monitor con el id `octave-notebook-dev`; `pnpm dev:raw` no depende de esa herramienta local.
+`pnpm dev` levanta el mismo entorno y, si encuentra el shim local de Console Monitor (`.upm/bin/cm` en Linux y macOS, `.upm/bin/cm.cmd` en Windows), lo registra con el id `octave-notebook-dev`. Sin ese shim equivale a `pnpm dev:raw`, que nunca depende de esa herramienta local.
 
 Para cambiar el puerto de la API de desarrollo:
 
@@ -162,7 +162,7 @@ Esta prueba genera el paquete actual, ejecuta `node package/install.mjs --prefix
 
 | Comando | Descripción |
 | --- | --- |
-| `pnpm dev` | API y Vite en watch mediante Console Monitor |
+| `pnpm dev` | API y Vite en watch, mediante Console Monitor si está instalado |
 | `pnpm dev:raw` | API y Vite en watch sin Console Monitor |
 | `pnpm serve` | Build y servidor de producción sin HMR |
 | `pnpm serve:dist` | Sirve un `dist/` ya generado |
