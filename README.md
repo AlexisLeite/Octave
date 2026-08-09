@@ -17,6 +17,10 @@ IDE local de notebooks para [GNU Octave](https://octave.org/), construido con Re
 - Temas claro y oscuro, panel redimensionable y restauración del estado de trabajo.
 - Instalador y CLI portables para Windows, macOS y Linux.
 
+## Ayuda integrada con código ejecutable
+
+<img width="1067" height="747" alt="image" src="https://github.com/user-attachments/assets/3463672a-0e9f-408b-8fee-acc566f3bdb9" />
+
 ## Requisitos
 
 - [Node.js](https://nodejs.org/) 20 o posterior.
