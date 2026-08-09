@@ -16,7 +16,7 @@
     {
       "id": "42d63256-ab34-4ff3-ae06-cf93d161c9bf",
       "kind": "code",
-      "source": "% Voy a tratar eM como el valor mínimo que cumple que eM > 0 y 1 + eM > 1.\r\n\r\ni = 2;\r\neM = 1;\r\n\r\ndo\r\n  eMcurr = 1 / 2 ^ i++;\r\n\r\n  if (1 + eMcurr) > 1\r\n    eM = eMcurr;\r\n  else\r\n    break;\r\n  end\r\nuntil false;\r\n\r\nheading(\"em\", eM);\r\nheading(\"iters\", i);\r\n\r\nheading(\"Epsilon -- eps\", eps(1))"
+      "source": "% Voy a tratar eM como el valor mínimo que cumple que eM > 0 y 1 + eM > 1.\r\ne = 1;\r\ni = 0;\r\n\r\nwhile 1 + e > 1\r\n  e = e / 2;\r\n  i++;\r\nend\r\n\r\ne = e * 2;\r\n\r\nheading(\"em\", e);\r\nheading(\"iters\", i);\r\n\r\nheading(\"Epsilon -- eps\", eps(1))"
     },
     {
       "id": "9e849ee7-fb93-401e-a302-c9fb9b4f1db2",
@@ -26,7 +26,7 @@
     {
       "id": "0391e83f-813d-46ef-b2d1-f0dd359dfadd",
       "kind": "code",
-      "source": "clear;\r\n\r\nx = 1;\r\n\r\n% Encontrar la mayor potencia de 2 finita\r\nwhile isfinite(x * 2)\r\n  x *= 2;\r\nendwhile\r\n\r\n% Buscar el mayor factor entre 1 y 2\r\nlo = 1;\r\nhi = 2;\r\n\r\nfor i = 1:60\r\n  k = (lo + hi) / 2;\r\n\r\n  if isfinite(x * k)\r\n    lo = k;\r\n  else\r\n    hi = k;\r\n  endif\r\nendfor\r\n\r\nmaximo = x * lo\r\nrealmax"
+      "source": "x = 1;\r\n\r\nwhile isfinite(x * 2)\r\n  x *= 2;\r\nend\r\n\r\nlo = 1;\r\nhi = 2;\r\nk = 0;\r\n\r\nfor i = 1:52\r\n  k = (lo + hi) / 2;\r\n  if isfinite(x * k)\r\n    lo = k;\r\n  else\r\n    hi = k;\r\n  end\r\nend\r\n\r\nheading(\"Maximo experimental\", x * lo);\r\nheading(\"Maximo\", realmax);\r\nheading(\"Dif\", x * lo - realmax);\r\nheading(\"Equals\", x * lo == realmax);"
     },
     {
       "id": "02b575b5-c84c-4c17-90a7-76fc7a3c2d40",
@@ -36,12 +36,17 @@
     {
       "id": "p1-code-01",
       "kind": "code",
-      "source": ""
+      "source": "x = 1;\r\ni = 0;\r\n\r\nwhile x / 2 > 0\r\n  x /= 2;\r\n  i++;\r\nend\r\n\r\nheading(\"Iters\", i);\r\nheading(\"Min exp\", x)\r\nheading(\"Min\", eps(0))\r\nheading(\"Dif\", x - eps(0));\r\nheading(\"Equals\", x == eps(0));"
     },
     {
       "id": "p1-exercise-02",
       "kind": "markdown",
-      "source": "## Ejercicio 2 (Precisión simple)\n\nEl formato de precisión simple es uno de 32 bits. Los números en dicho formato están definidos por\n\n$$\nx = \\pm(1+f)\\,2^e,\n$$\n\ndonde:\n\n- el signo ocupa 1 bit;\n- la mantisa ocupa 23 bits, esto es, $0 \\le f < 1$ y $2^{23}f$ es un número natural;\n- el exponente ocupa 8 bits, esto es, $-126 \\le e \\le 127$.\n\n¿Cuál es $\\varepsilon_M$ para este formato? ¿Cuáles son los números mayor y menor, en valor absoluto, que pueden representarse?\n\nSe considera $g:\\mathbb{R}\\to\\mathbb{R}$,\n\n$$\ng(x)=\\frac{x^3}{x-\\sin(x)},\n$$\n\ny se toma $x=5\\cdot10^{-4}$. Computar $g(x)$ en Octave.\n\nPor defecto, Octave trabaja con números de precisión doble; el comando `single` convierte una variable a precisión simple. Definir `y = single(x)` y computar $g(y)$ en Octave. ¿Qué resultado se obtiene? Explicar qué está ocurriendo."
+      "source": "## Ejercicio 2 (Precisión simple)\n\nEl formato de precisión simple es uno de 32 bits. Los números en dicho formato están definidos por\n\n$$\nx = \\pm(1+f)\\,2^e,\n$$\n\ndonde:\n\n* el signo ocupa 1 bit;\n* la mantisa ocupa 23 bits, esto es, $0 \\le f < 1$ y $2^{23}f$ es un número natural;\n* el exponente ocupa 8 bits, esto es, $-126 \\le e \\le 127$.\n\n¿Cuál es $\\varepsilon_M$ para este formato? ¿Cuáles son los números mayor y menor, en valor absoluto, que pueden representarse?"
+    },
+    {
+      "id": "3864779f-2054-4f4c-aff2-b6df26b6117a",
+      "kind": "markdown",
+      "source": "Se considera $g:\\mathbb{R}\\to\\mathbb{R}$,\n\n$$\ng(x)=\\frac{x^3}{x-\\sin(x)},\n$$\n\ny se toma $x=5\\cdot10^{-4}$. Computar $g(x)$ en Octave.\n\nPor defecto, Octave trabaja con números de precisión doble; el comando `single` convierte una variable a precisión simple. Definir `y = single(x)` y computar $g(y)$ en Octave. ¿Qué resultado se obtiene? Explicar qué está ocurriendo."
     },
     {
       "id": "8154fd79-d443-49e9-90a4-ad4c1f1056c4",
@@ -197,11 +202,27 @@
   "outputs": {
     "42d63256-ab34-4ff3-ae06-cf93d161c9bf": {
       "cellId": "42d63256-ab34-4ff3-ae06-cf93d161c9bf",
-      "stdout": "em\n  2.2204e-16\n\niters\n  54\n\nEpsilon -- eps\n  2.2204e-16",
+      "stdout": "em\n  2.2204e-16\n\niters\n  53\n\nEpsilon -- eps\n  2.2204e-16",
       "stderr": "",
-      "durationMs": 53.3408000000054,
+      "durationMs": 51.93339999997988,
       "error": null,
-      "source": "% Voy a tratar eM como el valor mínimo que cumple que eM > 0 y 1 + eM > 1.\r\n\r\ni = 2;\r\neM = 1;\r\n\r\ndo\r\n  eMcurr = 1 / 2 ^ i++;\r\n\r\n  if (1 + eMcurr) > 1\r\n    eM = eMcurr;\r\n  else\r\n    break;\r\n  end\r\nuntil false;\r\n\r\nheading(\"em\", eM);\r\nheading(\"iters\", i);\r\n\r\nheading(\"Epsilon -- eps\", eps(1))"
+      "source": "% Voy a tratar eM como el valor mínimo que cumple que eM > 0 y 1 + eM > 1.\r\ne = 1;\r\ni = 0;\r\n\r\nwhile 1 + e > 1\r\n  e = e / 2;\r\n  i++;\r\nend\r\n\r\ne = e * 2;\r\n\r\nheading(\"em\", e);\r\nheading(\"iters\", i);\r\n\r\nheading(\"Epsilon -- eps\", eps(1))"
+    },
+    "0391e83f-813d-46ef-b2d1-f0dd359dfadd": {
+      "cellId": "0391e83f-813d-46ef-b2d1-f0dd359dfadd",
+      "stdout": "Maximo experimental\n  1.7977e+308\n\nMaximo\n  1.7977e+308\n\nDif\n  0\n\nEquals\n  1",
+      "stderr": "",
+      "durationMs": 54.795699999667704,
+      "error": null,
+      "source": "x = 1;\r\n\r\nwhile isfinite(x * 2)\r\n  x *= 2;\r\nend\r\n\r\nlo = 1;\r\nhi = 2;\r\nk = 0;\r\n\r\nfor i = 1:52\r\n  k = (lo + hi) / 2;\r\n  if isfinite(x * k)\r\n    lo = k;\r\n  else\r\n    hi = k;\r\n  end\r\nend\r\n\r\nheading(\"Maximo experimental\", x * lo);\r\nheading(\"Maximo\", realmax);\r\nheading(\"Dif\", x * lo - realmax);\r\nheading(\"Equals\", x * lo == realmax);"
+    },
+    "p1-code-01": {
+      "cellId": "p1-code-01",
+      "stdout": "Iters\n  1074\n\nMin exp\n  4.9407e-324\n\nMin\n  4.9407e-324\n\nDif\n  0\n\nEquals\n  1",
+      "stderr": "",
+      "durationMs": 67.91520000062883,
+      "error": null,
+      "source": "x = 1;\r\ni = 0;\r\n\r\nwhile x / 2 > 0\r\n  x /= 2;\r\n  i++;\r\nend\r\n\r\nheading(\"Iters\", i);\r\nheading(\"Min exp\", x)\r\nheading(\"Min\", eps(0))\r\nheading(\"Dif\", x - eps(0));\r\nheading(\"Equals\", x == eps(0));"
     }
   }
 }

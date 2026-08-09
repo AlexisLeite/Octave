@@ -169,7 +169,7 @@
       "cellId": "dd33a0ad-d137-496a-963d-d803a8bb1753",
       "stdout": "V\n      1    2    3    4    5    6    7    8    9   10   11   12   13   14   15\n\nNorma\n  35.214\n\nNorma casera\nans = 35.214",
       "stderr": "",
-      "durationMs": 49.42809999999008,
+      "durationMs": 66.5973000000231,
       "error": null,
       "source": "function norma = norma(v) \r\n  norma = sqrt(sum(v.^2));\r\nend\r\n\r\nv = 1:15;\r\nheading(\"V\", v)\r\nheading(\"Norma\", norma(v))\r\n\r\n% La anterior es la solución correcta para la función norma, sin embargo para fines ilustrativos, podemos construirla paso a paso usando un for sobre el vector.\r\n\r\nfunction norma_casera = norma_casera(v)\r\n  norma = 0;\r\n  for x = v\r\n    norma = norma + x^2;\r\n  end\r\n  norma_casera = sqrt(norma);\r\nend\r\n\r\ndisp(\"\\nNorma casera\")\r\nnorma_casera(v)"
     },
@@ -177,7 +177,7 @@
       "cellId": "4ca98bec-5c8f-4ebb-9117-83c6f06a64ee",
       "stdout": "A\n     1   2   3\n     4   5   6\n     7   8   9\n\nIntercambio(A, 1, 2)\n     4   5   6\n     1   2   3\n     7   8   9",
       "stderr": "",
-      "durationMs": 58.561799999995856,
+      "durationMs": 79.4065999998711,
       "error": null,
       "source": "A = reshape(1:9, 3, 3)';\r\n\r\nfunction intercambio = intercambio(A, n, m)\r\n  N = A(n, :);\r\n  A(n, :) = A(m, :);\r\n  A(m, :) = N;\r\n  intercambio = A;\r\nend\r\n\r\nheading(\"A\", A);\r\nheading(\"Intercambio(A, 1, 2)\", intercambio(A, 1, 2));"
     },
@@ -185,7 +185,7 @@
       "cellId": "14fee94a-3cf2-468e-8066-e02405acd702",
       "stdout": "A\n     1   4   7\n     2   5   8\n     3   6   9\n\nV\n     15   16   17\n\nSustitución\n      1    4    7\n     15   16   17\n      3    6    9\n\nSustitución casera\n      1    4    7\n     15   16   17\n      3    6    9",
       "stderr": "",
-      "durationMs": 66.15469999999914,
+      "durationMs": 72.97860000003129,
       "error": null,
       "source": "A = reshape(1:9, 3, 3);\r\nheading(\"A\", A)\r\n\r\nfunction AA = sustitucion(A, v, n)\r\n  AA = A;\r\n  AA(n,:) = v;\r\nend\r\n\r\nV = 15:17;\r\nheading(\"V\", V)\r\n\r\nAA = sustitucion(A, V, 2);\r\nheading(\"Sustitución\", AA);\r\n\r\n% Nuevamente, la solución anterior es correcta, pero para aprender el lenguaje puedo construir otra que sea iterativa elemento a elemento\r\n\r\nfunction AA = sustitucion_casera(A, v, n)\r\n  ancho = size(A, 1);\r\n  AA = A;\r\n\r\n  for i=1:ancho\r\n    AA(n, i) = v(i);\r\n  end\r\nend\r\n\r\nheading(\"Sustitución casera\", sustitucion_casera(A, V, 2));"
     },
@@ -193,7 +193,7 @@
       "cellId": "27738fca-bc12-4c20-9312-1d300ab50cc5",
       "stdout": "Máximo\n  2\n\nMáximo clásico\n  5",
       "stderr": "",
-      "durationMs": 73.52949999998964,
+      "durationMs": 144.2695999997668,
       "error": null,
       "source": "function m = maximo(a, b)\r\n  m = ifelse(a > b, a, b);\r\nend\r\n\r\nheading(\"Máximo\", maximo(1, 2))\r\n\r\n# Además de la construcción ifelse del lenguaje, podemos usar if clásicos\r\n\r\nfunction m = maximo_clasico(a, b)\r\n  if a > b\r\n    m = a;\r\n  else\r\n    m = b;\r\n  end\r\nend\r\n\r\nheading(\"Máximo clásico\", maximo_clasico(3, 5))"
     },
@@ -201,7 +201,7 @@
       "cellId": "e1b22035-b37f-457c-95ec-eb9ec391ee3e",
       "stdout": "Valor: -100\n  -1\n\nValor: 0\n  0\n\nValor: 100\n  1",
       "stderr": "",
-      "durationMs": 62.82190000000992,
+      "durationMs": 87.55759999994189,
       "error": null,
       "source": "function s = signo(x)\r\n  if x == 0\r\n    s = 0;\r\n  elseif x > 0\r\n    s = 1;\r\n  else\r\n    s = -1;\r\n  end\r\nend\r\n\r\nheading(\"Valor: -100\", signo(-1))\r\nheading(\"Valor: 0\", signo(0))\r\nheading(\"Valor: 100\", signo(1))"
     },
@@ -209,7 +209,7 @@
       "cellId": "ca7bf199-0746-40a0-898a-231a26a41406",
       "stdout": "Es par: 1\n  0\n\nEs par: 2\n  1",
       "stderr": "",
-      "durationMs": 46.15790000000561,
+      "durationMs": 68.36310000019148,
       "error": null,
       "source": "function i = esPar(n)\r\n  i = ifelse(mod(n, 2) == 0, 1, 0);\r\nend\r\n\r\nheading(\"Es par: 1\", esPar(1))\r\nheading(\"Es par: 2\", esPar(2))"
     },
@@ -217,7 +217,7 @@
       "cellId": "d7d386d9-a4e9-40b1-81af-cdaa562fb319",
       "stdout": "Maximo 1\n  9\n\nMaximo 2\n  9",
       "stderr": "",
-      "durationMs": 45.824399999997695,
+      "durationMs": 67.73329999996349,
       "error": null,
       "source": "function m = maximo(A)\r\n  m = max(max(A));\r\nend\r\n\r\nA = reshape(1:9, 3, 3)';\r\n\r\nheading(\"Maximo 1\", maximo(A))\r\n\r\n% Si bien la solución es conceptualmente correcta, el ejercicio habla de usar for, así que a continuación va otra versión.\r\n\r\nfunction m = maximo2(A)\r\n  m = 0;\r\n  for col = A\r\n    for c = col'\r\n      if c > m\r\n        m = c;\r\n      end\r\n    end\r\n  end\r\nend\r\n\r\nheading(\"Maximo 2\", maximo2(A))"
     },
@@ -225,7 +225,7 @@
       "cellId": "52277e87-a9e3-46b5-b9b8-107ee88b945c",
       "stdout": "Serie\n  20",
       "stderr": "",
-      "durationMs": 46.1759999999922,
+      "durationMs": 56.637900000438094,
       "error": null,
       "source": "myFun = @(x) 2 * x;\r\n\r\nfunction r = serie(fn, N)\r\n  r=0;\r\n  for i=1:N\r\n    r+=fn(i);\r\n  end\r\nend\r\n\r\nheading(\"Serie\", serie(myFun, 4))"
     },
@@ -233,7 +233,7 @@
       "cellId": "bff0d48e-bc6f-40eb-9d4c-fa01c2478919",
       "stdout": "v = 1\nv = 0.5000\nv = 0.3333\nv = 0.2500\nv = 0.2000\nv = 0.1667\nv = 0.1429\nv = 0.1250\nv = 0.1111\nv = 0.1000\nv = 0.090909\n\nSerie decreciente\n  2.9290",
       "stderr": "",
-      "durationMs": 46.58629999999539,
+      "durationMs": 59.86780000012368,
       "error": null,
       "source": "funDecreciente = @(x) 1 / (1+x);\r\n\r\nfunction r = serie2(fn, e)\r\n  r = 0;\r\n  i = 0;\r\n  do\r\n    v = fn(i++)\r\n    if(v >= e)\r\n      r += v;\r\n    end\r\n  until(v < e);\r\nend\r\n\r\nheading(\"Serie decreciente\", serie2(funDecreciente, 0.1))"
     },
@@ -241,7 +241,7 @@
       "cellId": "3b85548d-537a-4bde-84c3-588abbd57bc9",
       "stdout": "    1    1    2    3    5    8   13   21   34   55   89",
       "stderr": "",
-      "durationMs": 52.688800000119954,
+      "durationMs": 70.12939999997616,
       "error": null,
       "source": "function v = fibonacci(n)\r\n  v = [1, 1];\r\n\r\n  for i = 3:n+1\r\n    v(i) = v(i-2) + v(i-1);\r\n  end\r\nend\r\n\r\ndisp(fibonacci(10))"
     },
@@ -249,7 +249,7 @@
       "cellId": "392b5c8d-bf6f-4c15-bd34-0be596d6b732",
       "stdout": "Calculado\n1.000000  2.000000  1.500000  1.666667  1.600000  1.625000  1.615385  1.619048  1.617647  1.618182  1.617978  1.618056  1.618026  1.618037  1.618033  1.618034  1.618034  1.618034  1.618034  1.618034  1.618034  1.618034  1.618034  1.618034  1.618034  1.618034  1.618034  1.618034  1.618034  1.618034  \n\nEuler\n  1.6180",
       "stderr": "",
-      "durationMs": 51.34750000014901,
+      "durationMs": 82.63789999997243,
       "error": null,
       "source": "v = fibonacci(30);\r\n\r\nfunction r = demo(v)\r\n  r = [];\r\n  for i = 2:size(v)(2)\r\n    r(i-1) = v(i) / v(i-1);\r\n  end\r\nend\r\n\r\nheading(\"Calculado\");\r\nfprintf('%.6f  ', demo(v));\r\n\r\nheading(\"\\nEuler\", phi = (1 + sqrt(5)) / 2);"
     },
@@ -257,16 +257,21 @@
       "cellId": "e0fd96a0-06f2-432c-9ee3-1242534b52a7",
       "stdout": "Collatz of 1\n     1   4   2   1",
       "stderr": "",
-      "durationMs": 51.271799999754876,
+      "durationMs": 78.20140000013635,
       "error": null,
       "source": "function x = collatz(m)\r\n  mm = m;\r\n  if mod(mm, 2) == 0\r\n    x = mm / 2;\r\n  else\r\n    x = 3 * mm + 1;\r\n  end\r\nend\r\n\r\nfunction xs = applyCollatz(maxIter, m)\r\n  xs = [];\r\n\r\n  xs(1) = m;\r\n\r\n  for i = 2:maxIter\r\n    xs(i) = collatz(xs(i-1));\r\n\r\n    if xs(i) == 1\r\n      break;\r\n    end\r\n  end\r\n\r\n  if xs(i) ~= 1\r\n    xs(maxIter+1) = -1;\r\n  end\r\nend\r\n\r\nheading(\"Collatz of 1\", applyCollatz(10, 1));"
     },
     "3e48e811-78bd-4c18-8592-0fe2268c4204": {
       "cellId": "3e48e811-78bd-4c18-8592-0fe2268c4204",
-      "stdout": "Passed\n  1",
+      "stdout": "",
       "stderr": "",
-      "durationMs": 473.7365000001155,
-      "error": null,
+      "durationMs": 131.47740000020713,
+      "error": {
+        "message": "'r' undefined near line 4, column 27",
+        "line": 4,
+        "column": 27,
+        "stack": "C:/Users/alexi/AppData/Local/Temp/octave-runtime-LO7iUJ/cell-3e48e811-78bd-4c18-8592-0fe2268c4204-4fd3dff0-c34c-4d05-a7b3-d03a9a87f4e1.m (C:/Users/alexi/AppData/Local/Temp/octave-runtime-LO7iUJ/cell-3e48e811-78bd-4c18-8592-0fe2268c4204-4fd3dff0-c34c-4d05-a7b3-d03a9a87f4e1.m:4:3)"
+      },
       "source": "ok = true;\r\n\r\nfor i = 1:1000\r\n  res = applyCollatz(200, r);\r\n  if res(size(res)(2)) ~= 1\r\n    ok = false;\r\n    break;\r\n  end\r\nend\r\n\r\nheading(\"Passed\", ok)"
     }
   }

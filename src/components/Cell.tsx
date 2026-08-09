@@ -148,17 +148,34 @@ export function Cell({ cell, index, order, output, running, onChange, onRun, onS
       <aside
         ref={gutterRef}
         className="cell-gutter"
-        draggable
-        onDragStart={(event) => {
-          event.dataTransfer.effectAllowed = 'move'
-          event.dataTransfer.setData('text/x-octave-cell', cell.id)
-          onDragStart()
-        }}
-        onDragEnd={onDragEnd}
       >
-        <GripVertical size={14} />
+        <span
+          className="cell-drag-handle"
+          draggable
+          role="button"
+          aria-label="Mover celda"
+          title="Mover celda"
+          onDragStart={(event) => {
+            event.dataTransfer.effectAllowed = 'move'
+            event.dataTransfer.setData('text/x-octave-cell', cell.id)
+            onDragStart()
+          }}
+          onDragEnd={onDragEnd}
+        >
+          <GripVertical size={14} />
+        </span>
         <span>{index + 1}</span>
-        {cell.kind === 'code' && <span ref={executionIndicatorRef} className="cell-execution-indicator"><LoadingDot active={running} /></span>}
+        {cell.kind === 'code' && (
+          <span
+            ref={executionIndicatorRef}
+            className="cell-execution-indicator"
+            role={running ? 'status' : undefined}
+            aria-label={running ? 'En ejecución' : undefined}
+            title={running ? 'En ejecución' : undefined}
+          >
+            <LoadingDot active={running} />
+          </span>
+        )}
       </aside>
       <div className="cell-body">
         <div ref={editorRegionRef} className="cell-editor-region">

@@ -146,10 +146,10 @@ button:disabled { opacity: .35; cursor: default; }
 .cell.drop-before::before { top: -8px; }
 .cell.drop-after::before { bottom: -8px; }
 .cell-gutter { display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 13px; border-right: 1px solid var(--border); border-radius: 7px 0 0 7px; color: var(--faint); font: 10px/1 ui-monospace, SFMono-Regular, Consolas, monospace; }
-.cell-gutter { cursor: grab; }
-.cell-gutter:active { cursor: grabbing; }
-.cell-gutter svg { opacity: 0; }
-.cell:hover .cell-gutter svg { opacity: .6; }
+.cell-drag-handle { width: 18px; height: 18px; display: grid; place-items: center; cursor: grab; }
+.cell-drag-handle:active { cursor: grabbing; }
+.cell-drag-handle svg { opacity: 0; }
+.cell:hover .cell-drag-handle svg { opacity: .6; }
 .cell-execution-indicator { width: 6px; height: 6px; display: grid; place-items: center; }
 .cell-execution-indicator[data-floating="true"] { position: fixed; z-index: 6; top: var(--cell-indicator-top); left: var(--cell-indicator-left); }
 .cell-body { min-width: 0; position: relative; border-radius: 0 7px 7px 0; }
