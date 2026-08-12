@@ -1,5 +1,5 @@
-import { Braces, Copy, GripVertical, Play, Plus, RotateCcw, Square, Text, Trash2, WandSparkles } from 'lucide-react'
-import { useEffect, useMemo, useRef } from 'react'
+import { Braces, ChevronUp, Copy, GripVertical, Play, Plus, RotateCcw, Square, Text, Trash2, WandSparkles } from 'lucide-react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ExecutionResult, NotebookCell } from '../types'
 import { LoadingDot } from './LoadingDot'
 import { MarkdownEditor } from './MarkdownEditor'
@@ -36,11 +36,13 @@ interface CellProps {
 }
 
 export function Cell({ cell, index, order, output, running, onChange, onRun, onStop, onFormat, onDelete, onClearOutput, onCopyContext, onKindChange, onInspect, completionSources, viewStateKey, dragging, dropEdge, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave, showInsertAfter, onAddAfter, onSplitMarkdownSelection }: CellProps) {
+  const [outputCollapsed, setOutputCollapsed] = useState(false)
   const cellRef = useRef<HTMLElement>(null)
   const gutterRef = useRef<HTMLElement>(null)
   const executionIndicatorRef = useRef<HTMLSpanElement>(null)
   const editorRegionRef = useRef<HTMLDivElement>(null)
   const actionsBoundaryRef = useRef<HTMLDivElement>(null)
+  const outputContentRef = useRef<HTMLDivElement>(null)
   const resultMatchesSource = output?.source === cell.source
   const diagnostics = useMemo(() => resultMatchesSource && output?.error?.line ? [{
       line: output.error.line,
@@ -48,6 +50,19 @@ export function Cell({ cell, index, order, output, running, onChange, onRun, onS
       severity: 'error' as const,
       message: output.error.message,
     }] : [], [resultMatchesSource, output?.error?.line, output?.error?.column, output?.error?.message])
+
+  useEffect(() => {
+    if (!output) setOutputCollapsed(false)
+  }, [output])
+
+  useEffect(() => {
+    if (!output || outputCollapsed) return
+    const frame = window.requestAnimationFrame(() => {
+      const content = outputContentRef.current
+      if (content) content.scrollTop = content.scrollHeight
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [output?.stdout, output?.stderr, output?.error?.message, outputCollapsed, running])
 
   useEffect(() => {
     const region = editorRegionRef.current
@@ -203,11 +218,26 @@ export function Cell({ cell, index, order, output, running, onChange, onRun, onS
           )}
         </div>
         {output && (output.stdout || output.stderr || output.error) && (
-          <div className={`cell-output ${output.error ? 'error' : ''}`}>
-            {output.stdout && <NumberedOutput value={output.stdout} />}
-            {output.stderr && <NumberedOutput value={output.stderr} />}
-            {output.error && <pre>{output.error.message}</pre>}
-            <span className="duration">{output.durationMs} ms</span>
+          <div className={`cell-output ${output.error ? 'error' : ''} ${outputCollapsed ? 'collapsed' : ''}`}>
+            <div className="cell-output-toolbar">
+              <span className="duration">{output.durationMs} ms</span>
+              <button
+                type="button"
+                className="cell-output-collapse"
+                aria-expanded={!outputCollapsed}
+                aria-label={outputCollapsed ? 'Expandir salida' : 'Colapsar salida'}
+                title={outputCollapsed ? 'Expandir salida' : 'Colapsar salida'}
+                onClick={() => setOutputCollapsed((collapsed) => !collapsed)}
+              >
+                <ChevronUp size={14} />
+                <span>{outputCollapsed ? 'Expandir' : 'Colapsar'}</span>
+              </button>
+            </div>
+            <div ref={outputContentRef} className="cell-output-content" aria-hidden={outputCollapsed}>
+              {output.stdout && <NumberedOutput value={output.stdout} />}
+              {output.stderr && <NumberedOutput value={output.stderr} />}
+              {output.error && <pre>{output.error.message}</pre>}
+            </div>
           </div>
         )}
       </div>

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { numberedOutputText, outputTail } from '../editor/outputTail'
+import { numberedOutputText, outputLines, outputTail } from '../editor/outputTail'
+import { virtualOutputRange } from './NumberedOutput'
 
 describe('outputTail', () => {
   it('keeps the real line numbers for the last 200 lines', () => {
@@ -25,5 +26,12 @@ describe('outputTail', () => {
     expect(copied.split('\n')).toHaveLength(200)
     expect(copied).toMatch(/^  3 \| value 3/m)
     expect(copied).toMatch(/^202 \| value 202$/m)
+  })
+
+  it('keeps every line available while rendering only the visible window', () => {
+    const value = Array.from({ length: 25_000 }, (_, index) => `line ${index + 1}`).join('\n')
+
+    expect(outputLines(value)).toHaveLength(25_000)
+    expect(virtualOutputRange(25_000, 19_000, 760)).toEqual({ start: 988, end: 1052 })
   })
 })

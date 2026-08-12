@@ -29,12 +29,23 @@ refresh runtime inactivity, so an attached but unused Octave process still reach
 the 10-minute idle limit. Both timers are unref'ed and generation-checked to make
 heartbeat/expiry races harmless.
 
-Every runtime starts with an implicit `heading(txt, txt2)` helper. It separates itself
-from preceding output and prints `txt`; when the optional `txt2` is present, it prints
-it immediately afterward. Blank lines around the outer edge of a cell result are
-normalized, so a heading at the start of the output has no leading gap. The helper is
-not represented as a notebook cell and is recreated whenever the document runtime is
-reset.
+Every runtime starts with three implicit helpers:
+
+- `heading(txt, txt2)` separates itself from preceding output and prints `txt`; when
+  the optional `txt2` is present, it prints it immediately afterward. Blank lines
+  around the outer edge of a cell result are normalized, so a heading at the start
+  of the output has no leading gap.
+- `printDouble(x)` prints the sign bit, the 11 exponent bits (and their effective
+  unbiased value), and the 52 mantissa bits (and their decimal value) of a real
+  scalar `double`. A zero exponent field is shown as `-1022`, including zero and
+  subnormals. For an all-ones exponent it prints `+Inf`, `-Inf`, or `NaN` followed
+  only by the three binary fields. `printDouble(title, x)` prepends `title`.
+- `printSingle(x)` prints the analogous fields of a real scalar `single`, using
+  `-126` for a zero exponent field. Its special values also print their meaning
+  followed only by the binary fields. `printSingle(title, x)` prepends `title`.
+
+The helpers are not represented as notebook cells and are recreated whenever the
+document runtime is reset.
 
 Each code cell is written verbatim to a short-lived `.m` file and loaded with
 `source`. This preserves cell-relative error line numbers. A random marker set is

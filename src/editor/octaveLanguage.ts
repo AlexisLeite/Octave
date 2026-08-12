@@ -444,19 +444,42 @@ function registerCompletionProvider(monaco: Monaco): IDisposable {
       appendSymbols(currentSymbols, '00', 'Celda actual');
       appendSymbols(currentFunctions, '01', 'Celda actual');
       appendSymbols(notebookSymbols, '02', 'Cuaderno');
-      if (!fieldOwner && !seen.has('heading')) {
-        seen.add('heading');
-        localItems.push({
-          label: 'heading',
-          filterText: 'heading',
-          kind: monaco.languages.CompletionItemKind.Function,
-          detail: 'Cuaderno · función implícita · heading(txt, txt2?)',
+      const implicitFunctions = [
+        {
+          name: 'heading',
+          signature: 'heading(txt, txt2?)',
           documentation: 'Muestra un encabezado y, opcionalmente, un segundo valor.',
           insertText: 'heading(${1:txt})',
-          insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-          range,
-          sortText: '03-heading',
-        });
+        },
+        {
+          name: 'printDouble',
+          signature: 'printDouble(x) / printDouble(titulo, x)',
+          documentation: 'Muestra los bits de signo, exponente y mantisa de un escalar double, con un título opcional como primera columna.',
+          insertText: 'printDouble(${1:x})',
+        },
+        {
+          name: 'printSingle',
+          signature: 'printSingle(x) / printSingle(titulo, x)',
+          documentation: 'Muestra los bits de signo, exponente y mantisa de un escalar single, con un título opcional como primera columna.',
+          insertText: 'printSingle(${1:x})',
+        },
+      ] as const;
+      if (!fieldOwner) {
+        for (const implicitFunction of implicitFunctions) {
+          if (seen.has(implicitFunction.name)) continue;
+          seen.add(implicitFunction.name);
+          localItems.push({
+            label: implicitFunction.name,
+            filterText: implicitFunction.name,
+            kind: monaco.languages.CompletionItemKind.Function,
+            detail: `Cuaderno · función implícita · ${implicitFunction.signature}`,
+            documentation: implicitFunction.documentation,
+            insertText: implicitFunction.insertText,
+            insertTextRules: monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+            range,
+            sortText: `03-${implicitFunction.name}`,
+          });
+        }
       }
 
       const snippetItems: languages.CompletionItem[] = snippets.map(([label, insertText, detail]) => ({

@@ -88,8 +88,54 @@ try {
   if (runtimeResponse.ok) {
     const execution = await postJson(`${baseUrl}/api/runtime/execute`, { runtimeId: runtimeBody.runtimeId, cellId: 'smoke', code: 'disp(6 * 7)' })
     if (execution.error || !/^42\s*$/m.test(execution.stdout)) throw new Error(`Octave no ejecutó el smoke test: ${JSON.stringify(execution)}`)
+    const printDouble = await postJson(`${baseUrl}/api/runtime/execute`, { runtimeId: runtimeBody.runtimeId, cellId: 'print-double', code: 'printDouble(1.0)' })
+    const expectedDouble = `0   01111111111   (    0)   ${'0'.repeat(52)}   (${' '.repeat(19)}0)`
+    if (printDouble.error || printDouble.stdout !== expectedDouble) throw new Error(`printDouble produjo una salida inesperada: ${JSON.stringify(printDouble)}`)
+    const printSingle = await postJson(`${baseUrl}/api/runtime/execute`, { runtimeId: runtimeBody.runtimeId, cellId: 'print-single', code: 'printSingle(single(1.0))' })
+    const expectedSingle = `0   01111111   (    0)   ${'0'.repeat(23)}   (${' '.repeat(9)}0)`
+    if (printSingle.error || printSingle.stdout !== expectedSingle) throw new Error(`printSingle produjo una salida inesperada: ${JSON.stringify(printSingle)}`)
+    const titledBits = await postJson(`${baseUrl}/api/runtime/execute`, { runtimeId: runtimeBody.runtimeId, cellId: 'print-bits-titled', code: 'printDouble("Double", 1.0); printSingle("Single", single(1.0))' })
+    const expectedTitledBits = `Double    ${expectedDouble}\nSingle    ${expectedSingle}`
+    if (titledBits.error || titledBits.stdout !== expectedTitledBits) throw new Error(`Las variantes con título produjeron una salida inesperada: ${JSON.stringify(titledBits)}`)
+    const edgeBits = await postJson(baseUrl + '/api/runtime/execute', {
+      runtimeId: runtimeBody.runtimeId,
+      cellId: 'print-bits-edge-cases',
+      code: [
+        'printDouble(0.0)',
+        'printDouble(typecast(uint64(1), "double"))',
+        'printDouble(Inf)',
+        'printDouble(-Inf)',
+        'printDouble(NaN)',
+        'printSingle(single(0.0))',
+        'printSingle(typecast(uint32(1), "single"))',
+        'printSingle(single(Inf))',
+        'printSingle(single(-Inf))',
+        'printSingle(single(NaN))',
+      ].join('; '),
+    })
+    const edgeLines = edgeBits.stdout.split('\n')
+    const expectedSpecialLines = [
+      '+Inf  0   ' + '1'.repeat(11) + '   ' + '0'.repeat(52),
+      '-Inf  1   ' + '1'.repeat(11) + '   ' + '0'.repeat(52),
+      '+Inf  0   ' + '1'.repeat(8) + '   ' + '0'.repeat(23),
+      '-Inf  1   ' + '1'.repeat(8) + '   ' + '0'.repeat(23),
+    ]
+    if (
+      edgeBits.error
+      || edgeLines.length !== 10
+      || !/^0\s+0{11}\s+\(-1022\)/.test(edgeLines[0])
+      || !/^0\s+0{11}\s+\(-1022\)\s+0{51}1\s+\(\s*1\)$/.test(edgeLines[1])
+      || edgeLines[2] !== expectedSpecialLines[0]
+      || edgeLines[3] !== expectedSpecialLines[1]
+      || !/^NaN\s+[01]\s+1{11}\s+[01]*1[01]*$/.test(edgeLines[4])
+      || !/^0\s+0{8}\s+\(-126\)/.test(edgeLines[5])
+      || !/^0\s+0{8}\s+\(-126\)\s+0{22}1\s+\(\s*1\)$/.test(edgeLines[6])
+      || edgeLines[7] !== expectedSpecialLines[2]
+      || edgeLines[8] !== expectedSpecialLines[3]
+      || !/^NaN\s+[01]\s+1{8}\s+[01]*1[01]*$/.test(edgeLines[9])
+    ) throw new Error('printDouble/printSingle fallaron en cero, subnormales o valores especiales: ' + JSON.stringify(edgeBits))
     await postJson(`${baseUrl}/api/runtime/close`, { runtimeId: runtimeBody.runtimeId })
-    console.log('Octave local: ejecución verificada (42).')
+    console.log('Octave local: ejecución, printDouble y printSingle verificados.')
   } else if (!/Octave|octave-cli/i.test(String(runtimeBody.error))) {
     throw new Error(`Error inesperado al abrir Octave: ${JSON.stringify(runtimeBody)}`)
   } else {
