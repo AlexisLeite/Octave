@@ -24,6 +24,7 @@ import {
   splitMarkdownDocument,
 } from '../editor/markdownMath'
 import { reconcileEditorValue, recordLocalEditorValue } from '../editor/editorValueSync'
+import { openImagePreview } from './imagePreview'
 
 interface MarkdownEditorProps {
   value: string
@@ -190,34 +191,57 @@ function pastedImages(notebookPath: string) {
   })
 }
 
-function openImagePreview(src: string, alt: string) {
-  const dialog = document.createElement('dialog')
-  dialog.className = 'markdown-image-preview'
-  const image = document.createElement('img')
-  image.src = src; image.alt = alt
-  dialog.append(image)
-  dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close() })
-  dialog.addEventListener('close', () => dialog.remove())
-  document.body.append(dialog); dialog.showModal()
-}
-
 function imageNodeView(node: ProseMirrorNode, editor: EditorView, getPos: () => number | undefined) {
   const dom = document.createElement('span')
   dom.className = 'markdown-image-node'
   dom.contentEditable = 'false'
+  dom.style.width = `${node.attrs.width}%`
   const image = document.createElement('img')
-  image.src = node.attrs.src; image.alt = node.attrs.alt || ''; image.style.width = `${node.attrs.width}%`
+  image.src = node.attrs.src; image.alt = node.attrs.alt || ''
   image.addEventListener('click', () => openImagePreview(image.src, image.alt))
-  const resize = document.createElement('input')
-  resize.type = 'range'; resize.min = '10'; resize.max = '100'; resize.value = String(node.attrs.width); resize.title = `Ancho: ${node.attrs.width}%`
-  resize.addEventListener('input', () => {
+  const handle = document.createElement('span')
+  handle.className = 'markdown-image-resize-handle'
+  handle.role = 'slider'; handle.tabIndex = 0
+  handle.setAttribute('aria-label', 'Redimensionar imagen')
+  const label = document.createElement('span')
+  label.className = 'markdown-image-size-label'
+
+  const applyWidth = (width: number) => {
+    const nextWidth = Math.min(100, Math.max(10, Math.round(width)))
+    dom.style.width = `${nextWidth}%`
+    label.textContent = `${nextWidth}%`
+    handle.setAttribute('aria-valuenow', String(nextWidth))
+    return nextWidth
+  }
+  applyWidth(node.attrs.width)
+  const persistWidth = (width: number) => {
     const position = getPos()
     if (position === undefined) return
-    resize.title = `Ancho: ${resize.value}%`
-    editor.dispatch(editor.state.tr.setNodeMarkup(position, undefined, { ...node.attrs, width: Number(resize.value) }))
+    editor.dispatch(editor.state.tr.setNodeMarkup(position, undefined, { ...node.attrs, width }))
+  }
+  handle.addEventListener('pointerdown', (event) => {
+    event.preventDefault(); event.stopPropagation()
+    handle.setPointerCapture(event.pointerId)
+    const containerWidth = dom.parentElement?.getBoundingClientRect().width || dom.getBoundingClientRect().width
+    let width = Number(node.attrs.width)
+    const move = (moveEvent: PointerEvent) => { width = applyWidth((moveEvent.clientX - dom.getBoundingClientRect().left) / containerWidth * 100) }
+    const end = () => {
+      handle.removeEventListener('pointermove', move)
+      handle.removeEventListener('pointerup', end)
+      handle.removeEventListener('pointercancel', end)
+      persistWidth(width)
+    }
+    handle.addEventListener('pointermove', move)
+    handle.addEventListener('pointerup', end)
+    handle.addEventListener('pointercancel', end)
   })
-  dom.append(image, resize)
-  return { dom, update(next: ProseMirrorNode) { if (next.type !== node.type) return false; node = next; image.src = next.attrs.src; image.style.width = `${next.attrs.width}%`; resize.value = String(next.attrs.width); return true } }
+  handle.addEventListener('keydown', (event) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+    event.preventDefault()
+    persistWidth(applyWidth(Number(node.attrs.width) + (event.key === 'ArrowRight' ? 5 : -5)))
+  })
+  dom.append(image, label, handle)
+  return { dom, update(next: ProseMirrorNode) { if (next.type !== node.type) return false; node = next; image.src = next.attrs.src; applyWidth(next.attrs.width); return true } }
 }
 
 export function MarkdownEditor({ value, onChange, onSplitSelection, viewStateKey, notebookPath }: MarkdownEditorProps) {

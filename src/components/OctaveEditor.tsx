@@ -36,6 +36,8 @@ export type OctaveEditorProps = {
 
 const MIN_HEIGHT = 32;
 const EMPTY_COMPLETION_SOURCES: string[] = [];
+const isTouchFirstDevice = () => typeof navigator !== 'undefined'
+  && (navigator.maxTouchPoints > 0 || globalThis.matchMedia?.('(pointer: coarse)').matches);
 // Bump when mount-time Monaco listeners change: Fast Refresh preserves the
 // existing editor instance and otherwise leaves the previous handlers alive.
 const EDITOR_MOUNT_REVISION = 'monaco-monotonic-drafts-v7';
@@ -106,6 +108,8 @@ export function OctaveEditor({
   const heightRef = useRef(MIN_HEIGHT);
   const pendingLocalValuesRef = useRef<string[]>([]);
   const applyingParentValueRef = useRef(false);
+  const touchFirstRef = useRef(isTouchFirstDevice());
+  const lineCountRef = useRef(1);
 
   onRunRef.current = onRun;
   onChangeRef.current = onChange;
@@ -130,7 +134,7 @@ export function OctaveEditor({
       const model = editorRef.current?.getModel();
       if (!monaco || !model) return;
       monaco.editor.setModelMarkers(model, 'octave-local', toMonacoMarkers(monaco, model, lintOctave(model.getValue())));
-    }, 120);
+    }, touchFirstRef.current ? 450 : 120);
   }, []);
 
   const bindInspector = useCallback(() => {
@@ -161,6 +165,7 @@ export function OctaveEditor({
   const onMount: OnMount = useCallback((instance, monaco) => {
     editorRef.current = instance;
     monacoRef.current = monaco;
+    lineCountRef.current = instance.getModel()?.getLineCount() ?? 1;
     // Monaco persists user-resized suggest dimensions globally. A previously
     // collapsed widget otherwise remains one row tall even with many matches.
     void instance.getAction('editor.action.resetSuggestSize')?.run();
@@ -205,6 +210,14 @@ export function OctaveEditor({
 
     multiCursorCleanupRef.current();
     const editorDomNode = instance.getDomNode();
+    const normalizeExponentKey = (event: InputEvent) => {
+      if (!instance.hasTextFocus() || !event.data || !/[ˆ＾]/.test(event.data)) return;
+      // Some tablet keyboard layouts emit U+02C6 (or the full-width variant)
+      // for the physical exponent key. Octave only accepts the ASCII caret.
+      event.preventDefault();
+      event.stopPropagation();
+      instance.trigger('octave-editor', 'type', { text: event.data.replace(/[ˆ＾]/g, '^') });
+    };
     const allowBrowserFind = (event: KeyboardEvent) => {
       if (!(event.ctrlKey || event.metaKey) || event.altKey || event.shiftKey || event.key.toLowerCase() !== 'f') return;
       // Do not preventDefault: stopping propagation before Monaco receives the
@@ -234,6 +247,7 @@ export function OctaveEditor({
     };
     editorDomNode?.addEventListener('keydown', allowBrowserFind, true);
     editorDomNode?.addEventListener('keydown', keepNotebookScrollStable, true);
+    editorDomNode?.addEventListener('beforeinput', normalizeExponentKey as EventListener, true);
     const isMultiCursorShortcut = (event: KeyboardEvent) => (
         !instance.hasTextFocus()
         ? false
@@ -266,6 +280,7 @@ export function OctaveEditor({
       window.removeEventListener('keyup', handleMultiCursorKeyEnd, true);
       editorDomNode?.removeEventListener('keydown', allowBrowserFind, true);
       editorDomNode?.removeEventListener('keydown', keepNotebookScrollStable, true);
+      editorDomNode?.removeEventListener('beforeinput', normalizeExponentKey as EventListener, true);
     };
 
     let applyingLayout = false;
@@ -394,9 +409,12 @@ export function OctaveEditor({
     instance.onDidChangeModelContent(() => {
       updateCommentContinuation();
       const model = instance.getModel();
-      // Content-size events can arrive a frame after Enter. Reserve the exact
-      // line-box height synchronously so the newly inserted line never clips.
-      if (model) {
+      // A synchronous Monaco layout on every character is particularly costly
+      // on tablets and can make hardware-keyboard events arrive faster than the
+      // main thread can consume them. Only reserve space when a line was added
+      // or removed; content-size events handle wrapping asynchronously.
+      if (model && model.getLineCount() !== lineCountRef.current) {
+        lineCountRef.current = model.getLineCount();
         resize(model.getLineCount() * 22 + 10);
         const position = instance.getPosition();
         if (position) instance.revealPosition(position, monaco.editor.ScrollType.Immediate);
@@ -562,8 +580,8 @@ export function OctaveEditor({
         ariaLabel: 'Octave code',
         automaticLayout: true,
         bracketPairColorization: { enabled: true },
-        cursorBlinking: 'smooth',
-        cursorSmoothCaretAnimation: 'on',
+        cursorBlinking: touchFirstRef.current ? 'solid' : 'smooth',
+        cursorSmoothCaretAnimation: touchFirstRef.current ? 'off' : 'on',
         detectIndentation: false,
         fixedOverflowWidgets: true,
         folding: true,
@@ -576,7 +594,7 @@ export function OctaveEditor({
         glyphMargin: false,
         guides: { bracketPairs: true, indentation: false },
         // Marker diagnostics use Monaco's hover even when runtime inspection is unavailable.
-        hover: { enabled: true, delay: 300 },
+        hover: { enabled: !touchFirstRef.current, delay: 300 },
         lineDecorationsWidth: 8,
         lineNumbersMinChars: 3,
         minimap: { enabled: false },
@@ -589,7 +607,13 @@ export function OctaveEditor({
         roundedSelection: false,
         scrollbar: { alwaysConsumeMouseWheel: false, verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
         scrollBeyondLastLine: false,
-        smoothScrolling: true,
+        smoothScrolling: !touchFirstRef.current,
+        // Touch-first devices frequently use Bluetooth keyboards but have much
+        // tighter main-thread budgets. Suggestions remain available explicitly
+        // with Ctrl+Space without doing work after every typed character.
+        quickSuggestions: touchFirstRef.current ? false : undefined,
+        suggestOnTriggerCharacters: !touchFirstRef.current,
+        acceptSuggestionOnEnter: touchFirstRef.current ? 'off' : 'on',
         // Mix snippets into the ranked list so local variables/functions with
         // sortText 00-03 stay ahead of generic language templates.
         snippetSuggestions: 'inline',
