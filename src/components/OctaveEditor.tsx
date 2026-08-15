@@ -311,21 +311,6 @@ export function OctaveEditor({
         applyingLayout = false;
       }
     };
-    instance.onKeyDown((event) => {
-      if (event.keyCode !== monaco.KeyCode.Enter
-        || event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) return;
-      const editorNode = instance.getDomNode();
-      if (editorNode?.querySelector('.suggest-widget.visible')) return;
-      const model = instance.getModel();
-      const selections = instance.getSelections();
-      if (!model || !selections?.length) return;
-      const replacedLines = selections.reduce(
-        (total, selection) => total + selection.endLineNumber - selection.startLineNumber,
-        0,
-      );
-      const nextLineCount = Math.max(1, model.getLineCount() + selections.length - replacedLines);
-      resize(Math.max(instance.getContentHeight(), nextLineCount * 22 + 10));
-    });
     resize();
     const resizeForViewport = () => resize();
     window.addEventListener('resize', resizeForViewport);
@@ -422,10 +407,19 @@ export function OctaveEditor({
       // main thread can consume them. Only reserve space when a line was added
       // or removed; content-size events handle wrapping asynchronously.
       if (model && model.getLineCount() !== lineCountRef.current) {
-        lineCountRef.current = model.getLineCount();
-        resize(model.getLineCount() * 22 + 10);
+        const nextLineCount = model.getLineCount();
+        const addedLines = nextLineCount - lineCountRef.current;
+        lineCountRef.current = nextLineCount;
+        // getContentHeight can still report the pre-Enter value during this
+        // synchronous notification. Grow from our committed host height so the
+        // newly inserted row is visible immediately, then reconcile after
+        // Monaco finishes measuring wrapped lines and padding.
+        resize(addedLines > 0
+          ? heightRef.current + addedLines * 22
+          : instance.getContentHeight());
         const position = instance.getPosition();
         if (position) instance.revealPosition(position, monaco.editor.ScrollType.Immediate);
+        window.requestAnimationFrame(() => resize(instance.getContentHeight()));
       }
       scheduleLocalMarkers();
     });
@@ -608,20 +602,12 @@ export function OctaveEditor({
         minimap: { enabled: false },
         overviewRulerBorder: false,
         overviewRulerLanes: 0,
-        // Keep the final line clear of Monaco's scrollable viewport edge.
-        padding: { top: 5, bottom: 14 },
+        padding: { top: 5, bottom: 5 },
         readOnly,
         renderLineHighlight: 'gutter',
         renderValidationDecorations: 'on',
         roundedSelection: false,
-        scrollbar: {
-          alwaysConsumeMouseWheel: false,
-          verticalScrollbarSize: 8,
-          // Lines are wrapped, so a horizontal bar only steals space from and
-          // can visually cover the final row on tablet browsers.
-          horizontal: 'hidden',
-          horizontalScrollbarSize: 0,
-        },
+        scrollbar: { alwaysConsumeMouseWheel: false, verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
         scrollBeyondLastLine: false,
         smoothScrolling: !touchFirstRef.current,
         // Touch-first devices frequently use Bluetooth keyboards but have much
