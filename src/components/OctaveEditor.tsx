@@ -40,7 +40,7 @@ const isTouchFirstDevice = () => typeof navigator !== 'undefined'
   && (navigator.maxTouchPoints > 0 || globalThis.matchMedia?.('(pointer: coarse)').matches);
 // Bump when mount-time Monaco listeners change: Fast Refresh preserves the
 // existing editor instance and otherwise leaves the previous handlers alive.
-const EDITOR_MOUNT_REVISION = 'monaco-monotonic-drafts-v7';
+const EDITOR_MOUNT_REVISION = 'monaco-tablet-height-v8';
 
 function mapPositionAfterFormatting(
   previous: string,
@@ -285,7 +285,15 @@ export function OctaveEditor({
 
     let applyingLayout = false;
     const resize = (measuredContentHeight?: number) => {
-      const maximum = Math.max(MIN_HEIGHT, Math.floor(window.innerHeight * 0.95));
+      // Mobile browsers can shrink innerHeight to the area above a virtual
+      // keyboard even while a Bluetooth keyboard is being used. That made
+      // long editors start scrolling at roughly a third of the tablet screen.
+      // screen.availHeight remains stable and is only used on touch-first
+      // devices; desktop windows continue respecting their actual viewport.
+      const availableHeight = touchFirstRef.current
+        ? Math.max(window.innerHeight, window.screen?.availHeight || 0)
+        : window.innerHeight;
+      const maximum = Math.max(MIN_HEIGHT, Math.floor(availableHeight * 0.9));
       const model = instance.getModel();
       const contentHeight = measuredContentHeight
         ?? (model ? instance.getContentHeight() : MIN_HEIGHT);
