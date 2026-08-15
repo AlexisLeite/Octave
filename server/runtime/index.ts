@@ -414,7 +414,7 @@ class OctaveRuntime {
           stdout: trimOuterBlankLines(protocol.stdout),
           stderr: trimOuterBlankLines(protocol.stderr),
           durationMs: Math.max(0, performance.now() - startedAt),
-          error: protocol.error ? normalizeOctaveError(protocol.error, sourcePath) : null,
+          error: protocol.error ? normalizeOctaveError(protocol.error, sourcePath, protocol.stderr) : null,
         };
       } catch (error) {
         if (error instanceof RuntimeTimeoutError || error instanceof RuntimeCancelledError) {
@@ -1083,8 +1083,17 @@ async function windowsOctaveCandidates(): Promise<string[]> {
   return candidates;
 }
 
-function normalizeOctaveError(error: OctaveErrorPayload, sourcePath: string): RuntimeError {
-  const message = error.message || error.identifier || "Octave execution failed";
+function normalizeOctaveError(error: OctaveErrorPayload, sourcePath: string, stderr = ""): RuntimeError {
+  const capturedMessage = error.message || error.identifier || "Octave execution failed";
+  // Parse failures raised through source() often expose only "error sourcing
+  // file" in the caught exception while the useful parser diagnostic (line,
+  // column and source excerpt) is written to stderr.
+  const stderrDiagnostic = trimOuterBlankLines(stderr)
+    .replaceAll(sourcePath.replaceAll("\\", "/"), "celda")
+    .replaceAll(sourcePath, "celda");
+  const message = /error sourcing file/i.test(capturedMessage) && stderrDiagnostic
+    ? stderrDiagnostic
+    : capturedMessage;
   const messageLocation = /near line\s+(\d+)(?:,\s*column\s+(\d+))?/i.exec(message);
   const frames = !error.stack ? [] : Array.isArray(error.stack) ? error.stack : [error.stack];
   const normalizedSource = normalize(sourcePath).toLocaleLowerCase();
