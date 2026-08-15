@@ -608,12 +608,20 @@ export function OctaveEditor({
         minimap: { enabled: false },
         overviewRulerBorder: false,
         overviewRulerLanes: 0,
-        padding: { top: 5, bottom: 5 },
+        // Keep the final line clear of Monaco's scrollable viewport edge.
+        padding: { top: 5, bottom: 14 },
         readOnly,
         renderLineHighlight: 'gutter',
         renderValidationDecorations: 'on',
         roundedSelection: false,
-        scrollbar: { alwaysConsumeMouseWheel: false, verticalScrollbarSize: 8, horizontalScrollbarSize: 8 },
+        scrollbar: {
+          alwaysConsumeMouseWheel: false,
+          verticalScrollbarSize: 8,
+          // Lines are wrapped, so a horizontal bar only steals space from and
+          // can visually cover the final row on tablet browsers.
+          horizontal: 'hidden',
+          horizontalScrollbarSize: 0,
+        },
         scrollBeyondLastLine: false,
         smoothScrolling: !touchFirstRef.current,
         // Touch-first devices frequently use Bluetooth keyboards but have much
