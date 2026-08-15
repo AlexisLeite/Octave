@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Braces, CircleHelp, FilePlus2, FolderPlus, Moon, Pencil, Play, Plus, Printer, RotateCcw, Save, Sun, Trash2, Type } from 'lucide-react'
+import { Braces, CircleHelp, FilePlus2, FolderPlus, Moon, PanelLeftClose, PanelLeftOpen, Pencil, Play, Plus, Printer, RotateCcw, Save, Sun, Trash2, Type } from 'lucide-react'
 import { api, startRuntimeHeartbeat, type BackendConnectionStatus } from './api'
 import { Cell } from './components/Cell'
 import { FileTree, type CreatingNode } from './components/FileTree'
@@ -131,6 +131,7 @@ export default function App() {
     const stored = raw === null ? Number.NaN : Number(raw)
     return Number.isFinite(stored) ? Math.min(440, Math.max(176, stored)) : 248
   })
+  const [sidebarVisible, setSidebarVisible] = useState(() => localStorage.getItem('octave-sidebar-visible') !== 'false')
   const [outputs, setOutputs] = useState<Record<string, ExecutionResult>>({})
   const [running, setRunning] = useState<Set<string>>(new Set())
   const [draggedCell, setDraggedCell] = useState<string | null>(null)
@@ -336,6 +337,10 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('octave-sidebar-width', String(sidebarWidth))
   }, [sidebarWidth])
+
+  useEffect(() => {
+    localStorage.setItem('octave-sidebar-visible', String(sidebarVisible))
+  }, [sidebarVisible])
   useEffect(() => {
     localStorage.setItem('octave-help-v1-open', String(helpOpen))
   }, [helpOpen])
@@ -997,13 +1002,14 @@ export default function App() {
     : backendConnection === 'online' ? 'Backend conectado' : 'Backend sin conexión'
 
   return (
-    <main className="app-shell">
-      <aside className="sidebar" style={{ width: sidebarWidth }}>
+    <main className={`app-shell ${sidebarVisible ? '' : 'sidebar-hidden'}`}>
+      {sidebarVisible && <aside className="sidebar" style={{ width: sidebarWidth }}>
         <header className="sidebar-header">
           <div className="brand"><span className="brand-mark">∿</span><span>Octave</span></div>
           <div className="toolbar">
             <button onClick={() => beginCreate('file')} title="Nuevo documento" aria-label="Nuevo documento"><FilePlus2 size={15} /></button>
             <button onClick={() => beginCreate('directory')} title="Nueva carpeta" aria-label="Nueva carpeta"><FolderPlus size={15} /></button>
+            <button onClick={() => setSidebarVisible(false)} title="Ocultar barra lateral" aria-label="Ocultar barra lateral"><PanelLeftClose size={15} /></button>
           </div>
         </header>
         <FileTree
@@ -1030,9 +1036,14 @@ export default function App() {
           </button>
           <button onClick={() => setHelpOpen(true)} title="Ayuda · F1" aria-label="Ayuda"><CircleHelp size={15} /></button>
         </footer>
-      </aside>
-      <div className="splitter" onPointerDown={startResize} />
+      </aside>}
+      {sidebarVisible && <div className="splitter" onPointerDown={startResize} />}
       <section className="workspace">
+        {!sidebarVisible && (
+          <button className="sidebar-reveal" onClick={() => setSidebarVisible(true)} title="Mostrar barra lateral" aria-label="Mostrar barra lateral">
+            <PanelLeftOpen size={17} />
+          </button>
+        )}
         {document ? (
           <>
             <header className="workspace-header">
@@ -1106,6 +1117,7 @@ export default function App() {
                     .filter((candidate) => candidate.kind === 'code')
                     .map((candidate) => candidate.source)}
                   viewStateKey={`${document.id}:${cell.id}`}
+                  notebookPath={activePath!}
                   dragging={draggedCell === cell.id}
                   dropEdge={cellDrop?.id === cell.id ? cellDrop.edge : null}
                   onDragStart={() => { draggedCellRef.current = cell.id; setDraggedCell(cell.id); setCellDrop(null) }}

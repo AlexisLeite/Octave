@@ -7,6 +7,8 @@ import { keymap } from 'prosemirror-keymap'
 import { DOMParser as ProseMirrorDOMParser } from 'prosemirror-model'
 import { EditorState, Plugin, Selection as ProseMirrorSelection } from 'prosemirror-state'
 import { EditorView } from 'prosemirror-view'
+import type { Node as ProseMirrorNode } from 'prosemirror-model'
+import { api } from '../api'
 import {
   markdownBlockShortcut,
   markdownHeadingOnEnter,
@@ -28,6 +30,7 @@ interface MarkdownEditorProps {
   onChange: (value: string) => void
   onSplitSelection?: (remaining: string, extracted: string) => void
   viewStateKey?: string
+  notebookPath: string
 }
 
 interface SelectionToolbarPosition {
@@ -156,7 +159,68 @@ function formattedHtmlMathPaste() {
   })
 }
 
-export function MarkdownEditor({ value, onChange, onSplitSelection, viewStateKey }: MarkdownEditorProps) {
+function fileAsBase64(file: File) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onerror = () => reject(reader.error)
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '')
+    reader.readAsDataURL(file)
+  })
+}
+
+function pastedImages(notebookPath: string) {
+  return new Plugin({
+    props: {
+      handlePaste(view, event) {
+        const files = Array.from(event.clipboardData?.files || []).filter((file) => file.type.startsWith('image/'))
+        if (!files.length) return false
+        event.preventDefault()
+        const insertion = view.state.selection.from
+        void Promise.all(files.map(async (file) => {
+          const uploaded = await api.uploadNotebookImage(notebookPath, file.type, await fileAsBase64(file))
+          return view.state.schema.nodes.image.create({ src: uploaded.url, alt: file.name || 'Imagen', width: 100 })
+        })).then((images) => {
+          let transaction = view.state.tr
+          images.forEach((image, index) => { transaction = transaction.insert(Math.min(insertion + index, transaction.doc.content.size), image) })
+          view.dispatch(transaction.scrollIntoView())
+        }).catch((error) => window.alert(error instanceof Error ? error.message : 'No se pudo guardar la imagen'))
+        return true
+      },
+    },
+  })
+}
+
+function openImagePreview(src: string, alt: string) {
+  const dialog = document.createElement('dialog')
+  dialog.className = 'markdown-image-preview'
+  const image = document.createElement('img')
+  image.src = src; image.alt = alt
+  dialog.append(image)
+  dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close() })
+  dialog.addEventListener('close', () => dialog.remove())
+  document.body.append(dialog); dialog.showModal()
+}
+
+function imageNodeView(node: ProseMirrorNode, editor: EditorView, getPos: () => number | undefined) {
+  const dom = document.createElement('span')
+  dom.className = 'markdown-image-node'
+  dom.contentEditable = 'false'
+  const image = document.createElement('img')
+  image.src = node.attrs.src; image.alt = node.attrs.alt || ''; image.style.width = `${node.attrs.width}%`
+  image.addEventListener('click', () => openImagePreview(image.src, image.alt))
+  const resize = document.createElement('input')
+  resize.type = 'range'; resize.min = '10'; resize.max = '100'; resize.value = String(node.attrs.width); resize.title = `Ancho: ${node.attrs.width}%`
+  resize.addEventListener('input', () => {
+    const position = getPos()
+    if (position === undefined) return
+    resize.title = `Ancho: ${resize.value}%`
+    editor.dispatch(editor.state.tr.setNodeMarkup(position, undefined, { ...node.attrs, width: Number(resize.value) }))
+  })
+  dom.append(image, resize)
+  return { dom, update(next: ProseMirrorNode) { if (next.type !== node.type) return false; node = next; image.src = next.attrs.src; image.style.width = `${next.attrs.width}%`; resize.value = String(next.attrs.width); return true } }
+}
+
+export function MarkdownEditor({ value, onChange, onSplitSelection, viewStateKey, notebookPath }: MarkdownEditorProps) {
   // The component file intentionally exports only React components so Vite can
   // preserve the ProseMirror instance during Fast Refresh.
   const host = useRef<HTMLDivElement>(null)
@@ -327,6 +391,7 @@ export function MarkdownEditor({ value, onChange, onSplitSelection, viewStateKey
         ...(initialSelection ? { selection: initialSelection } : {}),
         plugins: [
           history(),
+          pastedImages(notebookPath),
           markdownInputShortcuts(),
           mathInputPlugin(),
           formattedHtmlMathPaste(),
@@ -357,7 +422,7 @@ export function MarkdownEditor({ value, onChange, onSplitSelection, viewStateKey
         }
       },
       attributes: { class: 'markdown-prosemirror', spellcheck: 'true' },
-      nodeViews: mathNodeViews,
+      nodeViews: { ...mathNodeViews, image: imageNodeView },
     })
     view.current = editor
     return () => { editor.destroy(); view.current = null }

@@ -1,5 +1,5 @@
 import express from 'express'
-import { randomUUID } from 'node:crypto'
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { lstat, mkdir, readFile, readdir, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import path from 'node:path'
@@ -14,12 +14,67 @@ if (!Number.isInteger(port) || port < 0 || port > 65_535) throw new Error(`Puert
 const app = express()
 const runtimes = createRuntimeManager()
 
+const authUser = process.env.OCTAVE_NOTEBOOK_AUTH_USER
+const authPassword = process.env.OCTAVE_NOTEBOOK_AUTH_PASSWORD
+const authSecret = process.env.OCTAVE_NOTEBOOK_AUTH_SECRET
+const authEnabled = Boolean(authUser && authPassword && authSecret)
+const sessionLifetimeSeconds = 365 * 24 * 60 * 60
+
+if ([authUser, authPassword, authSecret].some(Boolean) && !authEnabled) {
+  throw new Error('La autenticación requiere usuario, contraseña y secreto de sesión')
+}
+
+function sameSecret(first: string, second: string) {
+  return timingSafeEqual(createHash('sha256').update(first).digest(), createHash('sha256').update(second).digest())
+}
+
+function sessionToken(expiresAt: number) {
+  const payload = `v1.${expiresAt}`
+  const signature = createHmac('sha256', authSecret!).update(payload).digest('base64url')
+  return `${payload}.${signature}`
+}
+
+function validSession(token: string | undefined) {
+  if (!token) return false
+  const [version, expiry, signature, ...extra] = token.split('.')
+  if (version !== 'v1' || extra.length || !/^\d+$/.test(expiry || '') || !signature) return false
+  if (Number(expiry) <= Math.floor(Date.now() / 1000)) return false
+  const expected = createHmac('sha256', authSecret!).update(`${version}.${expiry}`).digest('base64url')
+  return sameSecret(signature, expected)
+}
+
+function loginPage(error = '') {
+  return `<!doctype html><html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Acceso a Octave Notebook</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#111827;color:#f9fafb;font-family:system-ui,sans-serif}form{width:min(22rem,calc(100vw - 3rem));padding:2rem;border:1px solid #374151;border-radius:1rem;background:#1f2937;box-shadow:0 1rem 3rem #0008}h1{font-size:1.35rem;margin:0 0 1.5rem}label{display:block;margin:.9rem 0 .35rem;color:#d1d5db}input,button{box-sizing:border-box;width:100%;padding:.8rem;border-radius:.5rem;font:inherit}input{border:1px solid #4b5563;background:#111827;color:#fff}button{margin-top:1.25rem;border:0;background:#2563eb;color:#fff;font-weight:700;cursor:pointer}.error{color:#fca5a5;margin:0 0 1rem}</style></head><body><form method="post" action="/login"><h1>Octave Notebook</h1>${error ? `<p class="error">${error}</p>` : ''}<label for="username">Usuario</label><input id="username" name="username" autocomplete="username" required autofocus><label for="password">Contraseña</label><input id="password" name="password" type="password" autocomplete="current-password" required><button type="submit">Entrar</button></form></body></html>`
+}
+
+if (authEnabled) {
+  app.get('/login', (req, res) => {
+    const cookie = req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('octave_session='))?.slice('octave_session='.length)
+    if (validSession(cookie)) return res.redirect('/')
+    res.status(200).type('html').send(loginPage())
+  })
+  app.post('/login', express.urlencoded({ extended: false, limit: '8kb' }), (req, res) => {
+    if (!sameSecret(String(req.body.username || ''), authUser!) || !sameSecret(String(req.body.password || ''), authPassword!)) {
+      return res.status(401).type('html').send(loginPage('Usuario o contraseña incorrectos.'))
+    }
+    const expiresAt = Math.floor(Date.now() / 1000) + sessionLifetimeSeconds
+    res.setHeader('Set-Cookie', `octave_session=${sessionToken(expiresAt)}; Path=/; Max-Age=${sessionLifetimeSeconds}; HttpOnly; Secure; SameSite=Strict`)
+    res.redirect(303, '/')
+  })
+  app.use((req, res, next) => {
+    const cookie = req.headers.cookie?.split(';').map((part) => part.trim()).find((part) => part.startsWith('octave_session='))?.slice('octave_session='.length)
+    if (validSession(cookie)) return next()
+    if (req.path.startsWith('/api/')) return res.status(401).json({ error: 'Autenticación requerida' })
+    res.redirect('/login')
+  })
+}
+
 app.use('/api', (_req, res, next) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8')
   next()
 })
 app.use(express.json({
-  limit: '4mb',
+  limit: '16mb',
   verify: (_req, _res, bytes, encoding) => {
     if (!['utf-8', 'utf8'].includes(encoding.toLowerCase())) throw new Error('La API solamente acepta JSON UTF-8')
     try {
@@ -136,9 +191,15 @@ app.get('/api/tree', async (_req, res, next) => {
 app.get('/api/assets', async (req, res, next) => {
   try {
     const target = projectPath(req.query.path)
-    if (path.extname(target.absolute).toLowerCase() !== '.pdf') throw new Error('Tipo de archivo no permitido')
+    const extension = path.extname(target.absolute).toLowerCase()
+    const allowed = new Map([
+      ['.pdf', 'application/pdf'], ['.png', 'image/png'], ['.jpg', 'image/jpeg'],
+      ['.jpeg', 'image/jpeg'], ['.gif', 'image/gif'], ['.webp', 'image/webp'],
+    ])
+    const contentType = allowed.get(extension)
+    if (!contentType) throw new Error('Tipo de archivo no permitido')
     const resolved = await resolveExistingFile(target)
-    res.type('application/pdf')
+    res.type(contentType)
     res.setHeader('Content-Disposition', inlineDisposition(path.basename(target.relative)))
     res.setHeader('X-Content-Type-Options', 'nosniff')
     res.sendFile(resolved, { acceptRanges: true, dotfiles: 'deny', lastModified: true }, (error) => {
@@ -146,6 +207,31 @@ app.get('/api/assets', async (req, res, next) => {
       if (res.headersSent) res.destroy(error)
       else next(error)
     })
+  } catch (error) { next(error) }
+})
+
+app.post('/api/notebooks/assets', async (req, res, next) => {
+  try {
+    const notebookTarget = projectPath(req.body.path)
+    if (path.extname(notebookTarget.absolute).toLowerCase() !== '.octnb') throw new Error('El recurso no es un cuaderno')
+    await resolveExistingFile(notebookTarget)
+    const extensions: Record<string, string> = {
+      'image/png': '.png', 'image/jpeg': '.jpg', 'image/gif': '.gif', 'image/webp': '.webp',
+    }
+    const extension = extensions[String(req.body.mime || '').toLowerCase()]
+    if (!extension) throw new Error('Formato de imagen no permitido')
+    const encoded = String(req.body.data || '')
+    if (!/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) throw new Error('Imagen inválida')
+    const bytes = Buffer.from(encoded, 'base64')
+    if (!bytes.length || bytes.length > 10 * 1024 * 1024) throw new Error('La imagen debe pesar entre 1 byte y 10 MB')
+    const assetsRelative = `${notebookTarget.relative.slice(0, -'.octnb'.length)}.assets`
+    const assets = projectPath(assetsRelative)
+    await assertDirectoryConfined(path.dirname(assets.absolute))
+    await mkdir(assets.absolute, { recursive: true })
+    const filename = `${randomUUID()}${extension}`
+    const relative = `${assets.relative}/${filename}`
+    await writeFile(path.join(assets.absolute, filename), bytes, { flag: 'wx' })
+    res.status(201).json({ url: `/api/assets?path=${encodeURIComponent(relative)}` })
   } catch (error) { next(error) }
 })
 

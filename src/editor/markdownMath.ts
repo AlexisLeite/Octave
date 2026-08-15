@@ -44,8 +44,24 @@ const mathBlockSpec: NodeSpec = {
 }
 
 const headingSpec = { ...baseSchema.nodes.heading.spec, content: 'inline*' }
+const imageSpec: NodeSpec = {
+  ...baseSchema.nodes.image.spec,
+  attrs: { src: {}, alt: { default: null }, title: { default: null }, width: { default: 100 } },
+  parseDOM: [{
+    tag: 'img[src]',
+    getAttrs: (dom) => {
+      const image = dom as HTMLImageElement
+      return { src: image.src, alt: image.alt || null, title: image.title || null, width: Number(image.dataset.width || 100) }
+    },
+  }],
+  toDOM: (node) => ['img', {
+    src: node.attrs.src, alt: node.attrs.alt, title: node.attrs.title,
+    'data-width': node.attrs.width, style: `width:${node.attrs.width}%;max-width:100%`,
+  }],
+}
 const nodes = baseSchema.spec.nodes
   .update('heading', headingSpec)
+  .update('image', imageSpec)
   .append({ math_inline: mathInlineSpec, math_block: mathBlockSpec })
 
 export const markdownSchema = new Schema({ nodes, marks: baseSchema.spec.marks })
@@ -155,12 +171,25 @@ function mathTokenizer() {
 
 export const markdownParser = new MarkdownParser(markdownSchema, mathTokenizer(), {
   ...defaultMarkdownParser.tokens,
+  image: { node: 'image', getAttrs: (token: any) => {
+    const title = token.attrGet('title') as string | null
+    const widthMatch = /^octave-width:(\d+)(?:;(.*))?$/.exec(title || '')
+    return {
+      src: token.attrGet('src'), alt: token.content || null,
+      title: widthMatch?.[2] || null, width: widthMatch ? Math.min(100, Math.max(10, Number(widthMatch[1]))) : 100,
+    }
+  } },
   math_inline: { node: 'math_inline', getAttrs: (token) => ({ latex: token.content }) },
   math_block: { node: 'math_block', getAttrs: (token) => ({ latex: token.content }) },
 })
 
 export const markdownSerializer = new MarkdownSerializer({
   ...defaultMarkdownSerializer.nodes,
+  image(state, node) {
+    const widthTitle = `octave-width:${node.attrs.width || 100}${node.attrs.title ? `;${node.attrs.title}` : ''}`
+    const encoded = node.type.create({ ...node.attrs, title: widthTitle })
+    defaultMarkdownSerializer.nodes.image(state, encoded, null as never, 0)
+  },
   math_inline(state, node) { state.text(`$${node.attrs.latex}$`, false) },
   math_block(state, node) {
     state.write(`$$\n${node.attrs.latex}\n$$`)

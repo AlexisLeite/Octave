@@ -243,6 +243,7 @@ export const api = {
   read: (path: string) => request<{ document: NotebookDocument; absolutePath: string }>(`/api/files?path=${encodeURIComponent(path)}`),
   create: (path: string, type: 'file' | 'directory') => request<{ path: string }>('/api/files', { method: 'POST', body: JSON.stringify({ path, type }) }),
   save: (path: string, document: NotebookDocument) => request<{ savedAt: string }>('/api/files', { method: 'PUT', body: JSON.stringify({ path, document }) }),
+  uploadNotebookImage: (path: string, mime: string, data: string) => request<{ url: string }>('/api/notebooks/assets', { method: 'POST', body: JSON.stringify({ path, mime, data }) }),
   pdf: (path: string) => requestBlob(`/api/notebooks/pdf?path=${encodeURIComponent(path)}`),
   remove: (path: string) => request<{ ok: true }>(`/api/files?path=${encodeURIComponent(path)}`, { method: 'DELETE' }),
   rename: (path: string, nextPath: string) => request<{ path: string }>('/api/files/rename', { method: 'POST', body: JSON.stringify({ path, nextPath }) }),

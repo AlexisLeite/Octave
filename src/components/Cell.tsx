@@ -23,6 +23,7 @@ interface CellProps {
   onInspect: (expression: string) => Promise<{ display: string; type?: string; shape?: string }>
   completionSources: string[]
   viewStateKey: string
+  notebookPath: string
   dragging: boolean
   dropEdge: 'before' | 'after' | null
   onDragStart: () => void
@@ -35,7 +36,7 @@ interface CellProps {
   onSplitMarkdownSelection: (remaining: string, extracted: string) => void
 }
 
-export function Cell({ cell, index, order, output, running, onChange, onRun, onStop, onFormat, onDelete, onClearOutput, onCopyContext, onKindChange, onInspect, completionSources, viewStateKey, dragging, dropEdge, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave, showInsertAfter, onAddAfter, onSplitMarkdownSelection }: CellProps) {
+export function Cell({ cell, index, order, output, running, onChange, onRun, onStop, onFormat, onDelete, onClearOutput, onCopyContext, onKindChange, onInspect, completionSources, viewStateKey, notebookPath, dragging, dropEdge, onDragStart, onDragEnd, onDragOver, onDrop, onDragLeave, showInsertAfter, onAddAfter, onSplitMarkdownSelection }: CellProps) {
   const [outputCollapsed, setOutputCollapsed] = useState(false)
   const cellRef = useRef<HTMLElement>(null)
   const gutterRef = useRef<HTMLElement>(null)
@@ -214,7 +215,7 @@ export function Cell({ cell, index, order, output, running, onChange, onRun, onS
           {cell.kind === 'code' ? (
             <OctaveEditor value={cell.source} onChange={onChange} onRun={onRun} onFormat={onFormat} diagnostics={diagnostics} onInspect={onInspect} completionSources={completionSources} viewStateKey={viewStateKey} />
           ) : (
-            <MarkdownEditor value={cell.source} onChange={onChange} onSplitSelection={onSplitMarkdownSelection} viewStateKey={viewStateKey} />
+            <MarkdownEditor value={cell.source} onChange={onChange} onSplitSelection={onSplitMarkdownSelection} viewStateKey={viewStateKey} notebookPath={notebookPath} />
           )}
         </div>
         {output && (output.stdout || output.stderr || output.error) && (

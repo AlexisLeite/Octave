@@ -26,6 +26,18 @@ export function ReadonlyMarkdown({ source, className = '' }: ReadonlyMarkdownPro
       math.innerHTML = renderLatexHtml(math.dataset.latex ?? '', displayMode)
       math.removeAttribute('title')
     })
+    fragment.querySelectorAll<HTMLImageElement>('img').forEach((image) => {
+      image.addEventListener('click', () => {
+        const dialog = document.createElement('dialog')
+        dialog.className = 'markdown-image-preview'
+        const preview = image.cloneNode() as HTMLImageElement
+        preview.removeAttribute('style')
+        dialog.append(preview)
+        dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close() })
+        dialog.addEventListener('close', () => dialog.remove())
+        document.body.append(dialog); dialog.showModal()
+      })
+    })
     element.replaceChildren(fragment)
   }, [source])
 
