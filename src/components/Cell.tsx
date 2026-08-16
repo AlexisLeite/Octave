@@ -63,7 +63,7 @@ export function Cell({ cell, index, order, output, running, onChange, onRun, onS
       if (content) content.scrollTop = content.scrollHeight
     })
     return () => window.cancelAnimationFrame(frame)
-  }, [output?.stdout, output?.stderr, output?.error?.message, outputCollapsed, running])
+  }, [output?.stdout, output?.stderr, output?.error?.message, output?.outputs, outputCollapsed, running])
 
   useEffect(() => {
     const region = editorRegionRef.current
@@ -218,7 +218,7 @@ export function Cell({ cell, index, order, output, running, onChange, onRun, onS
             <MarkdownEditor value={cell.source} onChange={onChange} onSplitSelection={onSplitMarkdownSelection} viewStateKey={viewStateKey} notebookPath={notebookPath} />
           )}
         </div>
-        {output && (output.stdout || output.stderr || output.error) && (
+        {output && (output.stdout || output.stderr || output.error || output.outputs?.length) && (
           <div className={`cell-output ${output.error ? 'error' : ''} ${outputCollapsed ? 'collapsed' : ''}`}>
             <div className="cell-output-toolbar">
               <span className="duration">{output.durationMs} ms</span>

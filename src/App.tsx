@@ -910,7 +910,7 @@ export default function App() {
           : ''
         sections.push('', `Error${location}:`, '```text', output.error.message, '```')
       }
-      if (!output.stdout && !output.stderr && !output.error) sections.push('', 'Resultado: sin salida')
+      if (!output.stdout && !output.stderr && !output.error && !output.outputs?.length) sections.push('', 'Resultado: sin salida')
     }
     try {
       await navigator.clipboard.writeText(sections.join('\n'))
