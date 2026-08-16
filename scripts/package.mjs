@@ -59,7 +59,7 @@ try {
     legalComments: 'none',
     define: { __PACKAGE_VERSION__: JSON.stringify(sourcePackage.version) },
   })
-  await writeFile(path.join(staging, 'README.md'), `# Octave Notebook\n\nRequiere Node.js 20+ y una instalación local de GNU Octave.\n\n\`\`\`sh\nnpx octave-notebook --port 4310 --projects ./projects\n\`\`\`\n`, 'utf8')
+  await writeFile(path.join(staging, 'README.md'), `# Octave Notebook\n\nRequiere Node.js 20+, GNU Octave y gnuplot disponible como toolkit gráfico de Octave.\n\n\`\`\`sh\nnpx octave-notebook setup\nnpx octave-notebook doctor\nnpx octave-notebook --port 4310 --projects ./projects\n\`\`\`\n`, 'utf8')
   await writeFile(path.join(staging, 'package.json'), `${JSON.stringify({
     name: sourcePackage.name,
     version: sourcePackage.version,

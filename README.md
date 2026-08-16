@@ -26,6 +26,7 @@ IDE local de notebooks para [GNU Octave](https://octave.org/), construido con Re
 - [Node.js](https://nodejs.org/) 20 o posterior.
 - [pnpm](https://pnpm.io/).
 - GNU Octave con `octave-cli` disponible en `PATH`, o una ruta indicada mediante `OCTAVE_CLI_PATH`.
+- gnuplot disponible en `PATH` y registrado como toolkit gráfico de Octave.
 
 El paquete no incluye los binarios de Octave. El comando `octave-notebook setup` puede descubrir una instalación existente o invocar `winget`, Homebrew, `apt-get`, `dnf`, `pacman` o `zypper` cuando estén disponibles.
 
@@ -101,8 +102,8 @@ octave-notebook doctor
 octave-notebook start --host 127.0.0.1 --port 4310 --projects ./projects
 ```
 
-- `setup` descubre o instala GNU Octave y guarda su ruta.
-- `doctor` valida Node, la configuración y el ejecutable de Octave.
+- `setup` descubre o instala GNU Octave y gnuplot, valida el toolkit gráfico y guarda la ruta de Octave.
+- `doctor` valida Node, la configuración, el ejecutable de Octave, gnuplot y su integración con Octave.
 - `start` inicia la aplicación; también es el comando predeterminado.
 - `--config <archivo>` aísla la configuración.
 - `--octave-path <ejecutable>` registra una ruta explícita.

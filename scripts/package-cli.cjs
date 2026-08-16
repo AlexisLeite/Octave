@@ -21,7 +21,7 @@ withCommonOptions(program.command('start', { isDefault: true }).description('Ini
   .option('--projects <directorio>', 'Directorio de cuadernos')
   .action(start)
 
-withCommonOptions(program.command('doctor').description('Verifica Node, configuración y Octave'))
+withCommonOptions(program.command('doctor').description('Verifica Node, configuración, Octave y gnuplot'))
   .action(doctor)
 
 withCommonOptions(program.command('setup').description('Configura o instala GNU Octave'))
@@ -61,16 +61,19 @@ async function doctor(options) {
   if (!octave) throw new Error(`Octave no fue encontrado. Ejecute "octave-notebook setup" o visite ${OCTAVE_DOWNLOAD}`)
   if (options.octavePath) writeConfig(options.config, { ...config, octavePath: octave })
   const version = runCapture(octave, ['--version'])
-  process.stdout.write(`Node ${process.version}\nOctave ${firstLine(version)}\nEjecutable ${octave}\nConfig ${path.resolve(options.config)}\n`)
+  assertGnuplot(octave)
+  const gnuplot = discoverGnuplot(octave)
+  const gnuplotVersion = runCapture(gnuplot, ['--version'])
+  process.stdout.write(`Node ${process.version}\nOctave ${firstLine(version)}\nEjecutable ${octave}\ngnuplot ${firstLine(gnuplotVersion)}\nGráficas gnuplot disponibles en Octave\nConfig ${path.resolve(options.config)}\n`)
 }
 
 async function setup(options) {
   const config = readConfig(options.config)
   let octave = await configuredOctave(options.octavePath, config)
   if (!octave) {
-    const installer = packageManagerCommand()
-    if (!installer) throw new Error(`No se encontró un gestor de paquetes compatible. Instale GNU Octave desde ${OCTAVE_DOWNLOAD}`)
-    process.stdout.write(`Instalando GNU Octave con ${installer.label}...\n`)
+    const installer = packageManagerCommand(true)
+    if (!installer) throw new Error(`No se encontró un gestor de paquetes compatible. Instale GNU Octave y gnuplot desde ${OCTAVE_DOWNLOAD}`)
+    process.stdout.write(`Instalando GNU Octave y gnuplot con ${installer.label}...\n`)
     const result = spawnSync(installer.command, installer.args, { stdio: 'inherit', windowsHide: true })
     if (result.error || result.status !== 0) {
       throw new Error(`La instalación con ${installer.label} falló. Instale GNU Octave desde ${OCTAVE_DOWNLOAD}`)
@@ -78,6 +81,15 @@ async function setup(options) {
     octave = await discoverOctave()
   }
   if (!octave) throw new Error(`Octave no pudo validarse después de la instalación. Consulte ${OCTAVE_DOWNLOAD}`)
+  if (!hasGnuplot(octave)) {
+    const installer = packageManagerCommand(false)
+    if (!installer) throw new Error('gnuplot no está disponible. Instálelo y asegúrese de que Octave exponga el toolkit "gnuplot".')
+    process.stdout.write(`Instalando gnuplot con ${installer.label}...\n`)
+    const result = spawnSync(installer.command, installer.args, { stdio: 'inherit', windowsHide: true })
+    if (result.error || result.status !== 0 || !hasGnuplot(octave)) {
+      throw new Error(`gnuplot no pudo validarse después de la instalación con ${installer.label}.`)
+    }
+  }
   writeConfig(options.config, { ...config, octavePath: octave })
   process.stdout.write(`Octave configurado: ${octave}\nConfig: ${path.resolve(options.config)}\n`)
 }
@@ -113,21 +125,42 @@ async function discoverOctave() {
   return null
 }
 
-function packageManagerCommand() {
+function packageManagerCommand(includeOctave) {
   if (process.platform === 'win32' && commandExists('winget')) return { label: 'winget', command: 'winget', args: ['install', '--id', 'GNU.Octave', '--exact', '--accept-package-agreements', '--accept-source-agreements'] }
-  if (process.platform === 'darwin' && commandExists('brew')) return { label: 'Homebrew', command: 'brew', args: ['install', 'octave'] }
+  if (process.platform === 'darwin' && commandExists('brew')) return { label: 'Homebrew', command: 'brew', args: ['install', ...(includeOctave ? ['octave'] : []), 'gnuplot'] }
   if (process.platform === 'linux') {
     const elevated = typeof process.getuid === 'function' && process.getuid() !== 0 && commandExists('sudo') ? ['sudo'] : []
     for (const candidate of [
-      ['apt-get', ['install', '-y', 'octave']],
-      ['dnf', ['install', '-y', 'octave']],
-      ['pacman', ['-S', '--needed', '--noconfirm', 'octave']],
-      ['zypper', ['--non-interactive', 'install', 'octave']],
+      ['apt-get', ['install', '-y', ...(includeOctave ? ['octave'] : []), 'gnuplot-nox']],
+      ['dnf', ['install', '-y', ...(includeOctave ? ['octave'] : []), 'gnuplot']],
+      ['pacman', ['-S', '--needed', '--noconfirm', ...(includeOctave ? ['octave'] : []), 'gnuplot']],
+      ['zypper', ['--non-interactive', 'install', ...(includeOctave ? ['octave'] : []), 'gnuplot']],
     ]) {
       if (commandExists(candidate[0])) return elevated.length ? { label: candidate[0], command: elevated[0], args: [candidate[0], ...candidate[1]] } : { label: candidate[0], command: candidate[0], args: candidate[1] }
     }
   }
   return null
+}
+
+function hasGnuplot(octave) {
+  if (!discoverGnuplot(octave)) return false
+  const script = 'toolkits = available_graphics_toolkits(); if (! any(strcmp(toolkits, "gnuplot"))), exit(2); endif; graphics_toolkit("gnuplot"); exit(0);'
+  const result = spawnSync(octave, ['--quiet', '--no-gui', '--eval', script], { stdio: 'ignore', windowsHide: true, timeout: 10000 })
+  return !result.error && result.status === 0
+}
+
+function discoverGnuplot(octave) {
+  if (commandExists('gnuplot')) return 'gnuplot'
+  const resolvedOctave = resolveExecutable(octave)
+  if (resolvedOctave && (path.isAbsolute(resolvedOctave) || /[\\/]/.test(resolvedOctave))) {
+    const adjacent = path.join(path.dirname(resolvedOctave), process.platform === 'win32' ? 'gnuplot.exe' : 'gnuplot')
+    if (canRun(adjacent)) return adjacent
+  }
+  return null
+}
+
+function assertGnuplot(octave) {
+  if (!hasGnuplot(octave)) throw new Error('gnuplot no está disponible o Octave no expone el toolkit "gnuplot". Ejecute "octave-notebook setup" después de instalar gnuplot.')
 }
 
 function defaultConfigPath() {
