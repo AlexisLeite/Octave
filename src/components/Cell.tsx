@@ -235,7 +235,10 @@ export function Cell({ cell, index, order, output, running, onChange, onRun, onS
               </button>
             </div>
             <div ref={outputContentRef} className="cell-output-content" aria-hidden={outputCollapsed}>
-              {output.stdout && <NumberedOutput value={output.stdout} />}
+              {output.outputs?.length ? output.outputs.map((block, blockIndex) => block.type === 'image'
+                ? <img className="octave-plot" key={blockIndex} src={block.value} alt={block.alt || 'Gráfica de Octave'} />
+                : <NumberedOutput key={blockIndex} value={block.value} />)
+                : output.stdout && <NumberedOutput value={output.stdout} />}
               {output.stderr && <NumberedOutput value={output.stderr} />}
               {output.error && <pre>{output.error.message}</pre>}
             </div>

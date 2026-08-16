@@ -33,6 +33,7 @@ export interface ExecutionResult {
   source?: string
   stdout: string
   stderr: string
+  outputs?: Array<{ type: 'text' | 'image'; value: string; alt?: string }>
   durationMs: number
   error: ExecutionError | null
   timedOut?: boolean

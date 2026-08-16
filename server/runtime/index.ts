@@ -4,6 +4,7 @@ import {
   access,
   mkdir,
   mkdtemp,
+  readFile,
   readdir,
   rm,
   writeFile,
@@ -57,8 +58,15 @@ export interface ExecuteResult {
   stderr: string;
   durationMs: number;
   error: RuntimeError | null;
+  outputs?: RuntimeOutputBlock[];
   timedOut?: boolean;
   cancelled?: boolean;
+}
+
+export interface RuntimeOutputBlock {
+  type: "text" | "image";
+  value: string;
+  alt?: string;
 }
 
 export interface ExecutionProgress {
@@ -153,6 +161,22 @@ const DEFAULT_MAX_OUTPUT_BYTES = 10 * 1024 * 1024;
 const DEFAULT_IDLE_TIMEOUT_MS = 10 * 60_000;
 const DEFAULT_CLIENT_TIMEOUT_MS = 30_000;
 const IMPLICIT_NOTEBOOK_SOURCES = [
+  {
+    label: "graphics-capture",
+    code: [
+      'warning("off", "Octave:gnuplot-graphics");',
+      'if any(strcmp(available_graphics_toolkits(), "gnuplot")); graphics_toolkit("gnuplot"); endif',
+      'set(0, "defaultfigurevisible", "off");',
+      "function __octave_notebook_capture__(filename, marker)",
+      "  drawnow();",
+      '  figures = findall(0, "type", "figure");',
+      "  if ! isempty(figures)",
+      '    print(figures(1), filename, "-dpng", "-r120");',
+      '    fprintf(1, "\\n%s\\n", marker); fflush(1);',
+      "  endif",
+      "endfunction",
+    ].join("\n"),
+  },
   {
     label: "heading",
     code: [
@@ -408,13 +432,16 @@ class OctaveRuntime {
         : undefined;
 
       try {
-        const protocol = await this.runSource(input.code, sourcePath, reportProgress);
+        const graphics = instrumentGraphics(input.code, this.directory);
+        const protocol = await this.runSource(graphics.code, sourcePath, reportProgress);
+        const rendered = await orderedRuntimeOutput(protocol.stdout, graphics.captures);
         return {
           cellId: input.cellId,
-          stdout: trimOuterBlankLines(protocol.stdout),
+          stdout: trimOuterBlankLines(rendered.stdout),
           stderr: trimOuterBlankLines(protocol.stderr),
           durationMs: Math.max(0, performance.now() - startedAt),
           error: protocol.error ? normalizeOctaveError(protocol.error, sourcePath, protocol.stderr) : null,
+          ...(rendered.outputs.length ? { outputs: rendered.outputs } : {}),
         };
       } catch (error) {
         if (error instanceof RuntimeTimeoutError || error instanceof RuntimeCancelledError) {
@@ -1177,4 +1204,78 @@ function validateClientId(clientId: string): void {
   ) {
     throw new TypeError("clientId must be a non-empty identifier of at most 128 characters");
   }
+}
+
+const GRAPHICS_CALLS = new Set(["plot", "bar", "barh", "stairs", "stem", "scatter", "hist", "histogram", "pie", "area", "errorbar", "loglog", "semilogx", "semilogy", "surf", "surface", "mesh", "contour", "contourf", "imagesc", "image", "imshow"]);
+
+function instrumentGraphics(code: string, directory: string) {
+  const captures: Array<{ marker: string; path: string }> = [];
+  const insertions: Array<{ at: number; text: string }> = [];
+  let quote: string | null = null;
+  let comment = false;
+  for (let index = 0; index < code.length; index += 1) {
+    const character = code[index];
+    if (comment) { if (character === "\n") comment = false; continue; }
+    if (quote) {
+      if (character === quote && code[index + 1] === quote) { index += 1; continue; }
+      if (character === quote) quote = null;
+      continue;
+    }
+    if (character === "%" || character === "#") { comment = true; continue; }
+    if (character === '"' || character === "'") { quote = character; continue; }
+    if (!/[A-Za-z_]/.test(character)) continue;
+    const match = /^[A-Za-z_]\w*/.exec(code.slice(index));
+    if (!match) continue;
+    const name = match[0];
+    index += name.length - 1;
+    if (!GRAPHICS_CALLS.has(name.toLowerCase())) continue;
+    let open = index + 1;
+    while (/\s/.test(code[open] || "")) open += 1;
+    if (code[open] !== "(") continue;
+    let depth = 1; let innerQuote: string | null = null; let close = -1;
+    for (let cursor = open + 1; cursor < code.length; cursor += 1) {
+      const current = code[cursor];
+      if (innerQuote) {
+        if (current === innerQuote && code[cursor + 1] === innerQuote) { cursor += 1; continue; }
+        if (current === innerQuote) innerQuote = null;
+        continue;
+      }
+      if (current === '"' || current === "'") { innerQuote = current; continue; }
+      if (current === "(") depth += 1;
+      if (current === ")" && --depth === 0) { close = cursor; break; }
+    }
+    if (close < 0) continue;
+    const id = randomUUID().replaceAll("-", "");
+    const imagePath = join(directory, `figure-${id}.png`);
+    const marker = `__OCTAVE_FIGURE_${id}__`;
+    captures.push({ marker, path: imagePath });
+    insertions.push({ at: close + 1, text: `; __octave_notebook_capture__(${octaveString(imagePath.replaceAll("\\", "/"))}, '${marker}')` });
+  }
+  let instrumented = code;
+  for (const insertion of insertions.sort((a, b) => b.at - a.at)) instrumented = instrumented.slice(0, insertion.at) + insertion.text + instrumented.slice(insertion.at);
+  return { code: instrumented, captures };
+}
+
+async function orderedRuntimeOutput(stdout: string, captures: Array<{ marker: string; path: string }>) {
+  if (!captures.length) return { stdout, outputs: [] as RuntimeOutputBlock[] };
+  const byMarker = new Map(captures.map((capture) => [capture.marker, capture]));
+  const outputs: RuntimeOutputBlock[] = [];
+  let plain = ""; let cursor = 0;
+  for (const match of stdout.matchAll(/__OCTAVE_FIGURE_[a-f0-9]+__/g)) {
+    const before = stdout.slice(cursor, match.index);
+    plain += before;
+    const text = trimOuterBlankLines(before);
+    if (text) outputs.push({ type: "text", value: text });
+    const capture = byMarker.get(match[0]);
+    if (capture) {
+      try { outputs.push({ type: "image", value: `data:image/png;base64,${(await readFile(capture.path)).toString("base64")}`, alt: "Gráfica de Octave" }); }
+      finally { await rm(capture.path, { force: true }).catch(() => undefined); }
+    }
+    cursor = (match.index ?? 0) + match[0].length;
+  }
+  const after = stdout.slice(cursor);
+  plain += after;
+  const text = trimOuterBlankLines(after);
+  if (text) outputs.push({ type: "text", value: text });
+  return { stdout: plain, outputs };
 }
