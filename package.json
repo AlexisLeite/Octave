@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": ".\\.upm\\bin\\cm.cmd run --id octave-notebook-dev --cwd . -- pnpm dev:raw",
+    "dev": "node scripts/dev.mjs",
     "dev:raw": "concurrently -k -n api,ui -c cyan,magenta \"pnpm dev:api\" \"pnpm dev:ui\"",
     "dev:api": "tsx watch scripts/dev-api.mjs",
     "dev:ui": "vite",
